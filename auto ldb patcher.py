@@ -10,7 +10,10 @@ from tkinter import ttk, messagebox
 LCF2XML_BIN = "lcf2xml.exe"
 LDB_FILE = "RPG_RT.ldb"
 EDB_FILE = "RPG_RT.edb"
-CONFIG_FILE = "easyrpg_config.json"
+CONFIG_FILE = os.path.join("data", "json", "easyrpg_config.json")
+
+# 안전장치: data/json 폴더가 없으면 자동으로 생성
+os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
 
 class PureEdbEasyRpgPatcher:
     def __init__(self, root):
