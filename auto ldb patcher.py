@@ -10,10 +10,7 @@ from tkinter import ttk, messagebox
 LCF2XML_BIN = "lcf2xml.exe"
 LDB_FILE = "RPG_RT.ldb"
 EDB_FILE = "RPG_RT.edb"
-CONFIG_FILE = os.path.join("data", "json", "easyrpg_config.json")
-
-# 안전장치: data/json 폴더가 없으면 자동으로 생성
-os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+CONFIG_FILE = "easyrpg_config.json"
 
 class PureEdbEasyRpgPatcher:
     def __init__(self, root):
@@ -104,6 +101,39 @@ class PureEdbEasyRpgPatcher:
         
         item_btn_frame = ttk.Frame(item_frame, padding=10)
         item_btn_frame.pack(fill="y", side="right")
+                ttk.Label(item_btn_frame, text="아이템 검색:").pack(anchor="w", pady=(0, 2))
+
+        self.item_search_var = tk.StringVar()
+
+        self.item_search_entry = ttk.Entry(
+            item_btn_frame,
+            textvariable=self.item_search_var,
+            width=25
+        )
+
+        self.item_search_entry.pack(anchor="w", pady=(0, 5))
+
+
+        self.item_combo_var = tk.StringVar()
+
+        self.item_combo = ttk.Combobox(
+            item_btn_frame,
+            textvariable=self.item_combo_var,
+            width=23,
+            state="readonly"
+        )
+
+        self.item_combo.pack(anchor="w", pady=(0, 10))
+
+        self.item_combo.bind(
+            "<<ComboboxSelected>>",
+            self.select_item
+        )
+
+        self.item_search_var.trace(
+            "w",
+            lambda *args: self.update_item_search()
+        )
         ttk.Label(item_btn_frame, text="아이템 ID:").pack(anchor="w", pady=(0, 2))
         self.item_id_entry = ttk.Entry(item_btn_frame, width=25); self.item_id_entry.pack(anchor="w", pady=(0, 10))
         ttk.Label(item_btn_frame, text="최대 수량:").pack(anchor="w", pady=(0, 2))
