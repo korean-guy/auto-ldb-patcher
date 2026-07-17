@@ -1,0 +1,51 @@
+{
+  "system_limits": {
+    "easyrpg_max_item_count": {
+      "value": 99,
+      "name": "기본 아이템 한도",
+      "max": 250
+    },
+    "easyrpg_max_actor_hp": {
+      "value": -1,
+      "name": "최대체력",
+      "max": 99999999
+    },
+    "easyrpg_max_actor_sp": {
+      "value": -1,
+      "name": "최대마력",
+      "max": 99999999
+    },
+    "easyrpg_max_stat_base_value": {
+      "value": -1,
+      "name": "캐릭터 최대 스텟",
+      "max": 999999
+    },
+    "easyrpg_max_stat_battle_value": {
+      "value": -1,
+      "name": "장비+버프 최대 스텟",
+      "max": 999999
+    },
+    "easyrpg_max_savefiles": {
+      "value": 15,
+      "name": "최대 세이브 파일수",
+      "max": 99
+    },
+    "easyrpg_max_damage": {
+      "value": -1,
+      "name": "최대 데미지",
+      "max": 99999999
+    },
+    "easyrpg_max_exp": {
+      "value": -1,
+      "name": "최대 경험치",
+      "max": 2100000000
+    }
+  },
+  "items": [
+    {
+      "id": 1,
+      "easyrpg_max_count": 250
+    }
+  ],
+  "skills": []
+}
