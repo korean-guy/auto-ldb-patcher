@@ -281,6 +281,35 @@ class PureEdbEasyRpgPatcher:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f: json.dump(self.current_config, f, ensure_ascii=False, indent=2)
         self.update_ui_tables()
 
+    def update_item_search(self):
+
+        keyword = self.item_search_var.get().lower()
+
+        result = []
+
+        for iid, name in self.edb_master_items.items():
+
+            if keyword in name.lower():
+
+                result.append(
+                    f"{iid:03} : {name}"
+                )
+
+        self.item_combo["values"] = result
+
+
+
+    def select_item(self, event=None):
+
+        value = self.item_combo_var.get()
+
+        if not value:
+            return
+
+        iid = value.split(":")[0].strip()
+
+        self.item_id_entry.delete(0, tk.END)
+        self.item_id_entry.insert(0, iid)
     def add_skill_rule(self):
         try:
             sid = int(self.skill_id_entry.get().strip())
