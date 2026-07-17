@@ -101,7 +101,7 @@ class PureEdbEasyRpgPatcher:
         
         item_btn_frame = ttk.Frame(item_frame, padding=10)
         item_btn_frame.pack(fill="y", side="right")
-                ttk.Label(item_btn_frame, text="아이템 검색:").pack(anchor="w", pady=(0, 2))
+        ttk.Label(item_btn_frame, text="아이템 검색:").pack(anchor="w", pady=(0, 2))
 
         self.item_search_var = tk.StringVar()
 
