@@ -26,6 +26,12 @@ ACCENT_HOVER = "#505354"
 SELECT_BG = "#0a5a8a"
 BORDER = "#454545"
 
+# ---- 아이템 타입 코드 ----
+ITEM_TYPE_NAMES = {
+    0: "일반", 1: "무기", 2: "방패", 3: "갑옷", 4: "투구", 5: "악세사리",
+    6: "회복약", 7: "스킬북", 8: "씨앗", 9: "특수", 10: "스위치",
+}
+
 
 class PureEdbEasyRpgPatcher:
     def __init__(self, root):
@@ -34,14 +40,33 @@ class PureEdbEasyRpgPatcher:
         self.root.geometry("1050x760")
 
         self.edb_master_items = {}
+        self.edb_master_item_types = {}
         self.edb_master_skills = {}
         self.current_config = {"system_limits": {}, "items": [], "skills": []}
 
         self.apply_dark_theme()
+        if not self.check_prerequisites():
+            return
         self.decompile_and_parse_edb_directly()
         self.load_config_json()
         self.create_widgets()
         self.refresh_edb_overlay()
+
+    def check_prerequisites(self):
+        missing = []
+        if not os.path.exists(LCF2XML_BIN):
+            missing.append(f"- {LCF2XML_BIN} (알만툴 변환 프로그램)")
+        if not os.path.exists(LDB_FILE):
+            missing.append(f"- {LDB_FILE} (알만툴 데이터베이스 파일)")
+        if missing:
+            messagebox.showerror(
+                "실행 실패",
+                "다음 필수 파일을 찾을 수 없습니다:\n\n" + "\n".join(missing) +
+                "\n\n스크립트와 같은 폴더에 함께 배치해 주세요."
+            )
+            self.root.destroy()
+            return False
+        return True
 
     def apply_dark_theme(self):
         self.root.configure(bg=BG)
@@ -70,12 +95,21 @@ class PureEdbEasyRpgPatcher:
         style.configure("Treeview.Heading", background=ACCENT, foreground=FG, relief="flat")
         style.map("Treeview.Heading", background=[("active", ACCENT_HOVER)])
         style.map("Treeview", background=[("selected", SELECT_BG)], foreground=[("selected", "#ffffff")])
+        style.configure("Vertical.TScrollbar", background=ACCENT, troughcolor=BG2,
+                         bordercolor=BORDER, arrowcolor=FG, relief="flat")
+        style.map("Vertical.TScrollbar", background=[("active", ACCENT_HOVER)])
 
-    def make_listbox(self, parent, height=6):
-        return tk.Listbox(parent, height=height, bg=BG2, fg=FG,
-                           selectbackground=SELECT_BG, selectforeground="#ffffff",
-                           highlightthickness=1, highlightbackground=BORDER,
-                           relief="flat", activestyle="none")
+    def make_listbox_with_scroll(self, parent, height=6):
+        frame = tk.Frame(parent, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical")
+        listbox = tk.Listbox(frame, height=height, bg=BG2, fg=FG,
+                              selectbackground=SELECT_BG, selectforeground="#ffffff",
+                              highlightthickness=0, relief="flat", activestyle="none",
+                              yscrollcommand=scrollbar.set)
+        scrollbar.config(command=listbox.yview)
+        listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        return frame, listbox
 
     def decompile_and_parse_edb_directly(self):
         if not os.path.exists(LDB_FILE): return
@@ -91,17 +125,23 @@ class PureEdbEasyRpgPatcher:
             with open(EDB_FILE, "r", encoding="utf-8") as f:
                 xml_text = f.read()
             self.edb_master_items.clear()
+            self.edb_master_item_types.clear()
             self.edb_master_skills.clear()
 
-            item_pattern = re.compile(r'<Item\s+id="(\d+)">.*?<name>(.*?)</name>', re.DOTALL | re.IGNORECASE)
-            for match in item_pattern.finditer(xml_text):
-                iid, name = match.group(1), match.group(2)
-                self.edb_master_items[int(iid)] = name if name else "이름 없음"
+            item_block_pattern = re.compile(r'<Item\s+id="(\d+)">(.*?)</Item>', re.DOTALL | re.IGNORECASE)
+            for match in item_block_pattern.finditer(xml_text):
+                iid, block = int(match.group(1)), match.group(2)
+                name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
+                type_m = re.search(r'<type>(.*?)</type>', block, re.DOTALL | re.IGNORECASE)
+                self.edb_master_items[iid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
+                if type_m and type_m.group(1).strip().lstrip("-").isdigit():
+                    self.edb_master_item_types[iid] = int(type_m.group(1).strip())
 
-            skill_pattern = re.compile(r'<Skill\s+id="(\d+)">.*?<name>(.*?)</name>', re.DOTALL | re.IGNORECASE)
-            for match in skill_pattern.finditer(xml_text):
-                sid, name = match.group(1), match.group(2)
-                self.edb_master_skills[int(sid)] = name if name else "이름 없음"
+            skill_block_pattern = re.compile(r'<Skill\s+id="(\d+)">(.*?)</Skill>', re.DOTALL | re.IGNORECASE)
+            for match in skill_block_pattern.finditer(xml_text):
+                sid, block = int(match.group(1)), match.group(2)
+                name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
+                self.edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
 
             print(f"[동기화 완료] 아이템: {len(self.edb_master_items)}개, 스킬: {len(self.edb_master_skills)}개 매칭 성공.")
         except Exception as e:
@@ -126,7 +166,7 @@ class PureEdbEasyRpgPatcher:
         if "skills" not in self.current_config: self.current_config["skills"] = []
 
         if "easyrpg_max_item_count" not in self.current_config["system_limits"]:
-            self.current_config["system_limits"]["easyrpg_max_item_count"] = {"value": 99, "name": "기본 아이템 한도", "max": 250}
+            self.current_config["system_limits"]["easyrpg_max_item_count"] = {"value": 99, "name": "기본 아이템 한도", "max": 255}
         elif isinstance(self.current_config["system_limits"]["easyrpg_max_item_count"], dict):
             self.current_config["system_limits"]["easyrpg_max_item_count"]["value"] = 99
 
@@ -148,12 +188,13 @@ class PureEdbEasyRpgPatcher:
 
         item_frame = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(item_frame, text="📦 아이템 최대 소지량 조절")
-        self.item_tree = ttk.Treeview(item_frame, columns=("ID", "이름", "최대수량"), show="headings", height=18)
-        for col, txt in [("ID", "ID"), ("이름", "아이템 이름"), ("최대수량", "최대 수량")]: self.item_tree.heading(col, text=txt)
+        self.item_tree = ttk.Treeview(item_frame, columns=("ID", "이름", "타입", "최대수량"), show="headings", height=18)
+        for col, txt in [("ID", "ID"), ("이름", "아이템 이름"), ("타입", "타입"), ("최대수량", "최대 수량")]: self.item_tree.heading(col, text=txt)
         self.item_tree.pack(fill="both", expand=True, side="left")
 
         self.item_tree.column("ID", width=60, anchor="center")
-        self.item_tree.column("이름", width=350, anchor="w")
+        self.item_tree.column("이름", width=280, anchor="w")
+        self.item_tree.column("타입", width=90, anchor="center")
         self.item_tree.column("최대수량", width=120, anchor="center")
         self.item_tree.bind("<<TreeviewSelect>>", self.on_item_select)
 
@@ -164,8 +205,8 @@ class PureEdbEasyRpgPatcher:
         self.item_search_entry = ttk.Entry(item_btn_frame, width=25)
         self.item_search_entry.pack(anchor="w", pady=(0, 2))
         self.item_search_entry.bind("<KeyRelease>", self.on_item_search)
-        self.item_search_listbox = self.make_listbox(item_btn_frame, height=5)
-        self.item_search_listbox.pack(anchor="w", fill="x", pady=(0, 10))
+        item_search_frame, self.item_search_listbox = self.make_listbox_with_scroll(item_btn_frame, height=6)
+        item_search_frame.pack(anchor="w", fill="x", pady=(0, 10))
         self.item_search_listbox.bind("<<ListboxSelect>>", self.on_item_search_select)
 
         ttk.Label(item_btn_frame, text="아이템 ID:").pack(anchor="w", pady=(0, 2))
@@ -182,14 +223,18 @@ class PureEdbEasyRpgPatcher:
 
         skill_frame = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(skill_frame, text="⚡ 스킬 크리티컬 & 기본 데미지 위력 조절")
-        self.skill_tree = ttk.Treeview(skill_frame, columns=("ID", "이름", "크리", "위력"), show="headings", height=18)
-        for col, txt in [("ID", "ID"), ("이름", "스킬 이름"), ("크리", "크리티컬 (%)"), ("위력", "기본 위력")]: self.skill_tree.heading(col, text=txt)
+        self.skill_tree = ttk.Treeview(skill_frame, columns=("ID", "이름", "크리", "위력", "공격력비율", "정신력비율"), show="headings", height=18)
+        headings = [("ID", "ID"), ("이름", "스킬 이름"), ("크리", "크리티컬 (%)"), ("위력", "기본 위력"),
+                    ("공격력비율", "공격력비율"), ("정신력비율", "정신력비율")]
+        for col, txt in headings: self.skill_tree.heading(col, text=txt)
         self.skill_tree.pack(fill="both", expand=True, side="left")
 
-        self.skill_tree.column("ID", width=60, anchor="center")
-        self.skill_tree.column("이름", width=350, anchor="w")
-        self.skill_tree.column("크리", width=110, anchor="center")
-        self.skill_tree.column("위력", width=110, anchor="center")
+        self.skill_tree.column("ID", width=50, anchor="center")
+        self.skill_tree.column("이름", width=220, anchor="w")
+        self.skill_tree.column("크리", width=90, anchor="center")
+        self.skill_tree.column("위력", width=90, anchor="center")
+        self.skill_tree.column("공격력비율", width=90, anchor="center")
+        self.skill_tree.column("정신력비율", width=90, anchor="center")
         self.skill_tree.bind("<<TreeviewSelect>>", self.on_skill_select)
 
         skill_btn_frame = ttk.Frame(skill_frame, padding=10)
@@ -199,8 +244,8 @@ class PureEdbEasyRpgPatcher:
         self.skill_search_entry = ttk.Entry(skill_btn_frame, width=25)
         self.skill_search_entry.pack(anchor="w", pady=(0, 2))
         self.skill_search_entry.bind("<KeyRelease>", self.on_skill_search)
-        self.skill_search_listbox = self.make_listbox(skill_btn_frame, height=5)
-        self.skill_search_listbox.pack(anchor="w", fill="x", pady=(0, 10))
+        skill_search_frame, self.skill_search_listbox = self.make_listbox_with_scroll(skill_btn_frame, height=6)
+        skill_search_frame.pack(anchor="w", fill="x", pady=(0, 10))
         self.skill_search_listbox.bind("<<ListboxSelect>>", self.on_skill_search_select)
 
         ttk.Label(skill_btn_frame, text="스킬 ID:").pack(anchor="w", pady=(0, 2))
@@ -208,7 +253,11 @@ class PureEdbEasyRpgPatcher:
         ttk.Label(skill_btn_frame, text="크리 확률:").pack(anchor="w", pady=(0, 2))
         self.skill_val_entry = ttk.Entry(skill_btn_frame, width=25); self.skill_val_entry.pack(anchor="w", pady=(0, 10))
         ttk.Label(skill_btn_frame, text="스킬 위력:").pack(anchor="w", pady=(0, 2))
-        self.skill_dmg_entry = ttk.Entry(skill_btn_frame, width=25); self.skill_dmg_entry.pack(anchor="w", pady=(0, 15))
+        self.skill_dmg_entry = ttk.Entry(skill_btn_frame, width=25); self.skill_dmg_entry.pack(anchor="w", pady=(0, 10))
+        ttk.Label(skill_btn_frame, text="공격력 비율 (physical_rate, 1=5%):").pack(anchor="w", pady=(0, 2))
+        self.skill_phys_entry = ttk.Entry(skill_btn_frame, width=25); self.skill_phys_entry.pack(anchor="w", pady=(0, 10))
+        ttk.Label(skill_btn_frame, text="정신력 비율 (magical_rate, 1=2.5%):").pack(anchor="w", pady=(0, 2))
+        self.skill_mag_entry = ttk.Entry(skill_btn_frame, width=25); self.skill_mag_entry.pack(anchor="w", pady=(0, 15))
         ttk.Button(skill_btn_frame, text="➕ 추가/수정", command=self.add_skill_rule).pack(fill="x", pady=3)
         ttk.Button(skill_btn_frame, text="❌ 규칙 삭제", command=self.delete_skill_rule).pack(fill="x", pady=3)
 
@@ -261,8 +310,10 @@ class PureEdbEasyRpgPatcher:
         for it in self.current_config.get("items", []):
             iid = it["id"]
             name = self.edb_master_items.get(iid) or "⚠️ 알만툴 DB에 없음"
+            type_code = self.edb_master_item_types.get(iid)
+            type_name = ITEM_TYPE_NAMES.get(type_code, "-") if type_code is not None else "-"
             display_count = it["easyrpg_max_count"] if it["easyrpg_max_count"] != -1 else "순정 제한 유지"
-            self.item_tree.insert("", "end", values=(iid, name, display_count))
+            self.item_tree.insert("", "end", values=(iid, name, type_name, display_count))
 
         for skill in self.skill_tree.get_children(): self.skill_tree.delete(skill)
         for sk in self.current_config.get("skills", []):
@@ -270,7 +321,9 @@ class PureEdbEasyRpgPatcher:
             name = self.edb_master_skills.get(sid) or "⚠️ 알만툴 DB에 없음"
             crit = "순정 유지" if sk.get("easyrpg_critical_hit_chance") == "keep" else sk.get("easyrpg_critical_hit_chance")
             dmg = "순정 유지" if sk.get("rating") == "keep" else sk.get("rating")
-            self.skill_tree.insert("", "end", values=(sid, name, crit, dmg))
+            phys = "순정 유지" if sk.get("physical_rate", "keep") == "keep" else sk.get("physical_rate")
+            mag = "순정 유지" if sk.get("magical_rate", "keep") == "keep" else sk.get("magical_rate")
+            self.skill_tree.insert("", "end", values=(sid, name, crit, dmg, phys, mag))
 
         for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
         limits = self.current_config.get("system_limits", {})
@@ -310,6 +363,12 @@ class PureEdbEasyRpgPatcher:
             self.skill_dmg_entry.delete(0, tk.END)
             if sk.get("rating") != "keep":
                 self.skill_dmg_entry.insert(0, str(sk.get("rating")))
+            self.skill_phys_entry.delete(0, tk.END)
+            if sk.get("physical_rate", "keep") != "keep":
+                self.skill_phys_entry.insert(0, str(sk.get("physical_rate")))
+            self.skill_mag_entry.delete(0, tk.END)
+            if sk.get("magical_rate", "keep") != "keep":
+                self.skill_mag_entry.insert(0, str(sk.get("magical_rate")))
 
     def on_sys_select(self, event):
         selected = self.sys_tree.selection()
@@ -401,9 +460,9 @@ class PureEdbEasyRpgPatcher:
             iid = int(self.item_id_entry.get().strip())
             val_input = self.item_val_entry.get().strip()
             val = int(val_input) if val_input else -1
-            if val > 250:
-                val = 250
-                messagebox.showwarning("수량 제한", "엔진 세이브 오동작 방지를 위해 개별 아이템 한도는 250개로 자동 한정됩니다.")
+            if val > 255:
+                val = 255
+                messagebox.showwarning("수량 제한", "엔진 세이브 오동작 방지를 위해 개별 아이템 한도는 255개로 자동 한정됩니다.")
             if iid not in self.edb_master_items:
                 if not messagebox.askyesno("경고", "순정 아이템에 없습니다. 진행할까요?"): return
             self.current_config["items"] = [i for i in self.current_config["items"] if i["id"] != iid]
@@ -445,12 +504,19 @@ class PureEdbEasyRpgPatcher:
             sid = int(self.skill_id_entry.get().strip())
             c_input = self.skill_val_entry.get().strip()
             d_input = self.skill_dmg_entry.get().strip()
+            p_input = self.skill_phys_entry.get().strip()
+            m_input = self.skill_mag_entry.get().strip()
             crit_val = int(c_input) if c_input else "keep"
             dmg_val = int(d_input) if d_input else "keep"
+            phys_val = int(p_input) if p_input else "keep"
+            mag_val = int(m_input) if m_input else "keep"
             if sid not in self.edb_master_skills:
                 if not messagebox.askyesno("경고", "순정 스킬에 없습니다. 진행할까요?"): return
             self.current_config["skills"] = [s for s in self.current_config["skills"] if s["id"] != sid]
-            self.current_config["skills"].append({"id": sid, "easyrpg_critical_hit_chance": crit_val, "rating": dmg_val})
+            self.current_config["skills"].append({
+                "id": sid, "easyrpg_critical_hit_chance": crit_val, "rating": dmg_val,
+                "physical_rate": phys_val, "magical_rate": mag_val,
+            })
             self.save_config()
             self.update_ui_tables()
         except ValueError: messagebox.showerror("에러", "ID와 수치들은 숫자로 입력해 주세요.")
@@ -524,6 +590,14 @@ class PureEdbEasyRpgPatcher:
                                 r_tag = skill_node.find("rating")
                                 if r_tag is not None: r_tag.text = str(sk["rating"])
                                 else: ET.SubElement(skill_node, "rating").text = str(sk["rating"])
+                            if sk.get("physical_rate", "keep") != "keep":
+                                p_tag = skill_node.find("physical_rate")
+                                if p_tag is not None: p_tag.text = str(sk["physical_rate"])
+                                else: ET.SubElement(skill_node, "physical_rate").text = str(sk["physical_rate"])
+                            if sk.get("magical_rate", "keep") != "keep":
+                                m_tag = skill_node.find("magical_rate")
+                                if m_tag is not None: m_tag.text = str(sk["magical_rate"])
+                                else: ET.SubElement(skill_node, "magical_rate").text = str(sk["magical_rate"])
         tree.write(EDB_FILE, encoding="utf-8", xml_declaration=True)
 
         try:
