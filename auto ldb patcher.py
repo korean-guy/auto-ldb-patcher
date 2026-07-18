@@ -99,6 +99,11 @@ class PureEdbEasyRpgPatcher:
                          bordercolor=BORDER, arrowcolor=FG, relief="flat")
         style.map("Vertical.TScrollbar", background=[("active", ACCENT_HOVER)])
 
+    def attach_tree_scrollbar(self, tree, parent):
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="left", fill="y")
+
     def make_listbox_with_scroll(self, parent, height=6):
         frame = tk.Frame(parent, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
         scrollbar = ttk.Scrollbar(frame, orient="vertical")
@@ -187,10 +192,11 @@ class PureEdbEasyRpgPatcher:
         self.notebook.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         item_frame = ttk.Frame(self.notebook, padding=10)
-        self.notebook.add(item_frame, text="📦 아이템 최대 소지량 조절")
+        self.notebook.add(item_frame, text="📦 [개별] 아이템 최대 소지량 조절")
         self.item_tree = ttk.Treeview(item_frame, columns=("ID", "이름", "타입", "최대수량"), show="headings", height=18)
         for col, txt in [("ID", "ID"), ("이름", "아이템 이름"), ("타입", "타입"), ("최대수량", "최대 수량")]: self.item_tree.heading(col, text=txt)
         self.item_tree.pack(fill="both", expand=True, side="left")
+        self.attach_tree_scrollbar(self.item_tree, item_frame)
 
         self.item_tree.column("ID", width=60, anchor="center")
         self.item_tree.column("이름", width=280, anchor="w")
@@ -228,6 +234,7 @@ class PureEdbEasyRpgPatcher:
                     ("공격력비율", "공격력비율"), ("정신력비율", "정신력비율")]
         for col, txt in headings: self.skill_tree.heading(col, text=txt)
         self.skill_tree.pack(fill="both", expand=True, side="left")
+        self.attach_tree_scrollbar(self.skill_tree, skill_frame)
 
         self.skill_tree.column("ID", width=50, anchor="center")
         self.skill_tree.column("이름", width=220, anchor="w")
@@ -270,6 +277,7 @@ class PureEdbEasyRpgPatcher:
         self.sys_tree = ttk.Treeview(sys_frame, columns=("필드명", "옵션명", "설정된수치"), show="headings", height=18)
         for col, txt in [("필드명", "시스템 태그명"), ("옵션명", "한글 기능명"), ("설정된수치", "현재 제한 수치")]: self.sys_tree.heading(col, text=txt)
         self.sys_tree.pack(fill="both", expand=True, side="left")
+        self.attach_tree_scrollbar(self.sys_tree, sys_frame)
 
         self.sys_tree.column("필드명", width=240, anchor="w")
         self.sys_tree.column("옵션명", width=220, anchor="w")
