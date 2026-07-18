@@ -1,19 +1,40 @@
 import os
+import sys
 import json
 import re
 import subprocess
 import xml.etree.ElementTree as ET
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
-# 파일 고정 경로 정의
-LCF2XML_BIN = "lcf2xml.exe"
-LDB_FILE = "RPG_RT.ldb"
-EDB_FILE = "RPG_RT.edb"
-CONFIG_FILE = os.path.join("data", "json", "easyrpg_config.json")
 
-# 안전장치: data/json 폴더가 없으면 자동으로 생성
-os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+def get_program_dir():
+    """프로그램(스크립트 또는 exe)이 위치한 폴더를 반환합니다."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def sanitize_folder_name(name):
+    invalid = '<>:"/\\|?*'
+    cleaned = "".join(c for c in name if c not in invalid).strip()
+    return cleaned if cleaned else "untitled_project"
+
+
+def get_project_title(game_dir):
+    """게임 폴더의 RPG_RT.ini에서 Title 값을 읽어옵니다. 없으면 폴더명을 사용합니다."""
+    ini_path = os.path.join(game_dir, "RPG_RT.ini")
+    if os.path.exists(ini_path):
+        try:
+            with open(ini_path, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+            m = re.search(r'^\s*Title\s*=\s*(.+?)\s*$', text, re.MULTILINE | re.IGNORECASE)
+            if m and m.group(1).strip():
+                return m.group(1).strip()
+        except Exception as e:
+            print(f"RPG_RT.ini 읽기 실패: {e}")
+    return os.path.basename(os.path.normpath(game_dir))
+
 
 # ---- 다크 테마 색상 팔레트 ----
 BG = "#1e1e1e"
@@ -38,6 +59,12 @@ class PureEdbEasyRpgPatcher:
         self.root = root
         self.root.title("EasyRPG DB Editor (Dynamic External Plugin Version)")
         self.root.geometry("1050x760")
+        self._init_ok = False
+
+        self.program_dir = get_program_dir()
+        self.lcf2xml_bin = os.path.join(self.program_dir, "lcf2xml.exe")
+        self.common_config_file = os.path.join(self.program_dir, "config.json")
+        self.projects_dir = os.path.join(self.program_dir, "projects")
 
         self.edb_master_items = {}
         self.edb_master_item_types = {}
@@ -45,28 +72,107 @@ class PureEdbEasyRpgPatcher:
         self.current_config = {"system_limits": {}, "items": [], "skills": []}
 
         self.apply_dark_theme()
-        if not self.check_prerequisites():
+        self.root.withdraw()
+
+        self.load_common_config()
+
+        if not self.check_program_prerequisites():
+            self.root.destroy()
             return
+
+        if not self.select_game_folder():
+            self.root.destroy()
+            return
+
+        self.root.deiconify()
+
         self.decompile_and_parse_edb_directly()
-        self.load_config_json()
+        self.load_project_config()
         self.create_widgets()
         self.refresh_edb_overlay()
+        self._init_ok = True
 
-    def check_prerequisites(self):
+    def check_program_prerequisites(self):
         missing = []
-        if not os.path.exists(LCF2XML_BIN):
-            missing.append(f"- {LCF2XML_BIN} (알만툴 변환 프로그램)")
-        if not os.path.exists(LDB_FILE):
-            missing.append(f"- {LDB_FILE} (알만툴 데이터베이스 파일)")
+        if not os.path.exists(self.lcf2xml_bin):
+            missing.append(f"- lcf2xml.exe  (위치: {self.program_dir})")
         if missing:
             messagebox.showerror(
                 "실행 실패",
                 "다음 필수 파일을 찾을 수 없습니다:\n\n" + "\n".join(missing) +
-                "\n\n스크립트와 같은 폴더에 함께 배치해 주세요."
+                "\n\n프로그램 파일(py/exe)과 같은 폴더에 배치해 주세요."
             )
-            self.root.destroy()
             return False
         return True
+
+    # ------------------------------------------------------------------
+    # 게임 폴더 선택 / 프로젝트 결정
+    # ------------------------------------------------------------------
+    def select_game_folder(self):
+        last_dir = self.common_config.get("last_game_dir", "")
+        initial = last_dir if last_dir and os.path.isdir(last_dir) else os.getcwd()
+        while True:
+            folder = filedialog.askdirectory(
+                title="게임 폴더 선택 (RPG_RT.ldb가 있는 폴더)", initialdir=initial
+            )
+            if not folder:
+                return False
+            if not os.path.exists(os.path.join(folder, "RPG_RT.ldb")):
+                messagebox.showerror(
+                    "잘못된 폴더",
+                    "선택한 폴더에서 RPG_RT.ldb 파일을 찾을 수 없습니다.\n게임 폴더를 다시 선택해 주세요."
+                )
+                initial = folder
+                continue
+            self.set_game_folder(folder)
+            return True
+
+    def set_game_folder(self, folder):
+        self.game_dir = os.path.abspath(folder)
+        self.ldb_file = os.path.join(self.game_dir, "RPG_RT.ldb")
+        self.edb_file = os.path.join(self.game_dir, "RPG_RT.edb")
+        self.ini_file = os.path.join(self.game_dir, "RPG_RT.ini")
+
+        self.project_title = get_project_title(self.game_dir)
+        self.project_dir = os.path.join(self.projects_dir, sanitize_folder_name(self.project_title))
+        os.makedirs(self.project_dir, exist_ok=True)
+        self.project_config_file = os.path.join(self.project_dir, "config.json")
+
+        self.common_config["last_game_dir"] = self.game_dir
+        recents = [r for r in self.common_config.get("recent_projects", []) if r.get("path") != self.game_dir]
+        recents.insert(0, {"title": self.project_title, "path": self.game_dir})
+        self.common_config["recent_projects"] = recents[:10]
+        self.save_common_config()
+
+    def change_game_folder(self):
+        if self.select_game_folder():
+            self.decompile_and_parse_edb_directly()
+            self.load_project_config()
+            self.update_ui_tables()
+            self.refresh_edb_overlay()
+            if hasattr(self, "project_label"):
+                self.project_label.config(text=f"프로젝트: {self.project_title}   ({self.game_dir})")
+
+    # ------------------------------------------------------------------
+    # 공통 설정 (프로그램 폴더의 config.json)
+    # ------------------------------------------------------------------
+    def load_common_config(self):
+        default = {"last_game_dir": "", "recent_projects": [], "settings": {"theme": "dark"}}
+        if os.path.exists(self.common_config_file):
+            try:
+                with open(self.common_config_file, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                default.update(loaded)
+            except Exception as e:
+                print(f"공통 설정 로드 실패: {e}")
+        self.common_config = default
+
+    def save_common_config(self):
+        try:
+            with open(self.common_config_file, "w", encoding="utf-8") as f:
+                json.dump(self.common_config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"공통 설정 저장 실패: {e}")
 
     def apply_dark_theme(self):
         self.root.configure(bg=BG)
@@ -117,17 +223,17 @@ class PureEdbEasyRpgPatcher:
         return frame, listbox
 
     def decompile_and_parse_edb_directly(self):
-        if not os.path.exists(LDB_FILE): return
+        if not os.path.exists(self.ldb_file): return
         print("[동기화] 최신 RPG_RT.edb 역변환 확보 중...")
         try:
-            subprocess.run([LCF2XML_BIN, LDB_FILE], check=True, shell=True)
+            subprocess.run([self.lcf2xml_bin, self.ldb_file], check=True, shell=True, cwd=self.game_dir)
         except Exception as e:
             print(f"lcf2xml 구동 실패: {e}"); return
-        if not os.path.exists(EDB_FILE): return
+        if not os.path.exists(self.edb_file): return
 
         print("[파싱] edb(XML) 내부에서 실시간으로 정보 색출 중...")
         try:
-            with open(EDB_FILE, "r", encoding="utf-8") as f:
+            with open(self.edb_file, "r", encoding="utf-8") as f:
                 xml_text = f.read()
             self.edb_master_items.clear()
             self.edb_master_item_types.clear()
@@ -152,19 +258,16 @@ class PureEdbEasyRpgPatcher:
         except Exception as e:
             print(f"edb 실시간 파싱 에러: {e}")
 
-    def load_config_json(self):
-        if not os.path.exists(CONFIG_FILE):
-            messagebox.showerror("실행 실패", f"필수 설정 파일인 '{CONFIG_FILE}'을 찾을 수 없습니다.\\n스크립트와 같은 폴더에 함께 배치해 주세요.")
-            self.root.destroy()
-            return
-
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    def load_project_config(self):
+        if os.path.exists(self.project_config_file):
             try:
-                self.current_config = json.load(f)
+                with open(self.project_config_file, "r", encoding="utf-8") as f:
+                    self.current_config = json.load(f)
             except Exception as e:
-                messagebox.showerror("JSON 에러", f"'{CONFIG_FILE}' 해석 오류: {e}")
-                self.root.destroy()
-                return
+                messagebox.showerror("JSON 에러", f"'{self.project_config_file}' 해석 오류: {e}")
+                self.current_config = {"system_limits": {}, "items": [], "skills": []}
+        else:
+            self.current_config = {"system_limits": {}, "items": [], "skills": []}
 
         if "system_limits" not in self.current_config: self.current_config["system_limits"] = {}
         if "items" not in self.current_config: self.current_config["items"] = []
@@ -175,14 +278,21 @@ class PureEdbEasyRpgPatcher:
         elif isinstance(self.current_config["system_limits"]["easyrpg_max_item_count"], dict):
             self.current_config["system_limits"]["easyrpg_max_item_count"]["value"] = 99
 
+        self.save_config()
+
     def save_config(self):
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        with open(self.project_config_file, "w", encoding="utf-8") as f:
             json.dump(self.current_config, f, ensure_ascii=False, indent=2)
 
     def create_widgets(self):
         top_frame = ttk.Frame(self.root, padding=10)
         top_frame.pack(fill="x")
         ttk.Button(top_frame, text="📥 edb로드", command=self.refresh_from_edb).pack(side="left", padx=5)
+        ttk.Button(top_frame, text="🗂 게임 폴더 변경", command=self.change_game_folder).pack(side="left", padx=5)
+        self.project_label = ttk.Label(
+            top_frame, text=f"프로젝트: {self.project_title}   ({self.game_dir})", foreground=FG_DIM
+        )
+        self.project_label.pack(side="left", padx=15)
         ttk.Button(top_frame, text="💾 저장(ldb전환)", command=self.apply_final_patch).pack(side="right", padx=5)
 
         self.body_container = ttk.Frame(self.root)
@@ -307,7 +417,7 @@ class PureEdbEasyRpgPatcher:
     def refresh_edb_overlay(self):
         if not hasattr(self, "overlay"):
             return
-        if os.path.exists(EDB_FILE):
+        if os.path.exists(self.edb_file):
             self.overlay.place_forget()
         else:
             self.overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
@@ -458,10 +568,10 @@ class PureEdbEasyRpgPatcher:
         self.decompile_and_parse_edb_directly()
         self.update_ui_tables()
         self.refresh_edb_overlay()
-        if os.path.exists(EDB_FILE):
+        if os.path.exists(self.edb_file):
             messagebox.showinfo("완료", "순정 edb에서 개체 이름들을 실시간 동기화했습니다!")
         else:
-            messagebox.showerror("실패", f"'{LDB_FILE}' 파일을 찾지 못했거나 edb 변환에 실패했습니다.")
+            messagebox.showerror("실패", f"'{self.ldb_file}' 파일을 찾지 못했거나 edb 변환에 실패했습니다.")
 
     def add_item_rule(self):
         try:
@@ -558,10 +668,10 @@ class PureEdbEasyRpgPatcher:
         messagebox.showinfo("완료", f"등록된 스킬 {len(self.current_config['skills'])}개의 크리티컬 확률을 0으로 초기화했습니다.")
 
     def apply_final_patch(self):
-        if not os.path.exists(EDB_FILE):
+        if not os.path.exists(self.edb_file):
             messagebox.showerror("실패", "RPG_RT.edb 파일이 없습니다. 먼저 'edb로드' 버튼을 눌러주세요.")
             return
-        tree = ET.parse(EDB_FILE); root = tree.getroot()
+        tree = ET.parse(self.edb_file); root = tree.getroot()
         _container = root.find(".//system")
         system_container = _container if _container is not None else root.find(".//System")
         if system_container is not None:
@@ -606,17 +716,17 @@ class PureEdbEasyRpgPatcher:
                                 m_tag = skill_node.find("magical_rate")
                                 if m_tag is not None: m_tag.text = str(sk["magical_rate"])
                                 else: ET.SubElement(skill_node, "magical_rate").text = str(sk["magical_rate"])
-        tree.write(EDB_FILE, encoding="utf-8", xml_declaration=True)
+        tree.write(self.edb_file, encoding="utf-8", xml_declaration=True)
 
         try:
-            subprocess.run([LCF2XML_BIN, EDB_FILE], check=True, shell=True)
+            subprocess.run([self.lcf2xml_bin, self.edb_file], check=True, shell=True, cwd=self.game_dir)
         except Exception as e:
             messagebox.showerror("실패", f"lcf2xml 컴파일(edb → ldb) 실패: {e}")
             return
 
-        if os.path.exists(EDB_FILE):
+        if os.path.exists(self.edb_file):
             try:
-                os.remove(EDB_FILE)
+                os.remove(self.edb_file)
             except Exception as e:
                 print(f"edb 삭제 실패: {e}")
 
@@ -627,4 +737,5 @@ class PureEdbEasyRpgPatcher:
 if __name__ == "__main__":
     root = tk.Tk()
     app = PureEdbEasyRpgPatcher(root)
-    root.mainloop()
+    if getattr(app, "_init_ok", False):
+        root.mainloop()
