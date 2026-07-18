@@ -3,4 +3,4 @@ Required program: lef2xml.exe
 
 Easily enable additional, optional EasyRPG features.
 
-ldb -> edb -> easy yrpg option patch -> ldb -> delete edb
+ldb -> edb -> easy rpg option patch -> ldb -> delete edb
