@@ -3,7 +3,7 @@
     "easyrpg_max_item_count": {
       "value": 99,
       "name": "기본 아이템 한도",
-      "max": 250
+      "max": 255
     },
     "easyrpg_max_actor_hp": {
       "value": -1,
@@ -38,7 +38,7 @@
     "easyrpg_max_exp": {
       "value": -1,
       "name": "최대 경험치",
-      "max": 2100000000
+      "max": 2147483646
     }
   },
   "items": [
