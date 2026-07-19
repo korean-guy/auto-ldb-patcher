@@ -27,7 +27,8 @@ def sanitize_folder_name(name):
 
 
 def get_project_title(game_dir):
-    """게임 폴더의 RPG_RT.ini에서 Title 값을 읽어옵니다.
+    """게임 폴더의 RPG_RT.ini에서 게임 제목을 읽어옵니다.
+    GameTitle 키를 우선 확인하고, 없으면 Title 키를 확인합니다.
     실패하면 (폴더이름, 경고문구) 형태로 안전하게 대체값을 반환합니다."""
     ini_path = os.path.join(game_dir, "RPG_RT.ini")
     fallback = os.path.basename(os.path.normpath(game_dir))
@@ -41,39 +42,66 @@ def get_project_title(game_dir):
     except Exception as e:
         return fallback, f"RPG_RT.ini 파일을 읽을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.\n(사유: {e})"
 
-    m = re.search(r'^\s*Title\s*=\s*(.+?)\s*$', text, re.MULTILINE | re.IGNORECASE)
-    if not m or not m.group(1).strip():
-        return fallback, "RPG_RT.ini에서 Title 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
+    for key_name in ("GameTitle", "Title"):
+        m = re.search(rf'^\s*{key_name}\s*=\s*(.+?)\s*$', text, re.MULTILINE | re.IGNORECASE)
+        if m and m.group(1).strip():
+            return m.group(1).strip(), None
 
-    return m.group(1).strip(), None
+    return fallback, "RPG_RT.ini에서 GameTitle(Title) 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
+
+
+def normalize_options(raw_options):
+    """options를 {"값문자열": "라벨"} dict 형태로 정규화합니다."""
+    if isinstance(raw_options, dict):
+        return {str(k): v for k, v in raw_options.items()}
+    if isinstance(raw_options, list):
+        out = {}
+        for o in raw_options:
+            if isinstance(o, dict):
+                out[str(o.get("value"))] = o.get("label", str(o.get("value")))
+        return out
+    return {}
 
 
 def migrate_system_limits(raw):
-    """구버전(dict 형태) system_limits를 신버전(list 형태) 스키마로 변환합니다."""
-    if isinstance(raw, list):
-        return copy.deepcopy(raw)
+    """예전 버전들의 system_limits(구버전 dict / 중간버전 list)를 최신 dict 스키마로 변환합니다."""
+    migrated = {}
+
+    def build_entry(key, info):
+        if not isinstance(info, dict):
+            info = {"value": info}
+        entry = {
+            "type": info.get("type", "int"),
+            "name": info.get("name", info.get("label", key)),
+            "description": info.get("description", ""),
+            "value": info.get("value", info.get("default", -1)),
+            "default": info.get("default", info.get("value", -1)),
+        }
+        if entry["type"] == "int":
+            entry["max"] = info.get("max", 999999999)
+        if entry["type"] in ("enum", "list"):
+            entry["options"] = normalize_options(info.get("options", {}))
+        return entry
+
     if isinstance(raw, dict):
-        migrated = []
         for key, info in raw.items():
-            if isinstance(info, dict):
-                val = info.get("value", -1)
-                label = info.get("name", key)
-                max_v = info.get("max", 999999999)
-            else:
-                val, label, max_v = info, key, 999999999
-            default_v = 15 if key == "easyrpg_max_savefiles" else (99 if key == "easyrpg_max_item_count" else -1)
-            migrated.append({"name": key, "label": label, "type": "int", "value": val, "default": default_v, "max": max_v})
-        return migrated
-    return []
+            migrated[key] = build_entry(key, info)
+    elif isinstance(raw, list):
+        for info in raw:
+            key = info.get("name") if isinstance(info, dict) else None
+            if not key:
+                continue
+            migrated[key] = build_entry(key, info)
+
+    return migrated
 
 
-def merge_system_defs(existing_list, template_list):
-    """existing_list에 없는 항목을 template_list에서 채워 넣습니다 (새 EasyRPG 옵션 자동 반영)."""
-    existing_names = {d.get("name") for d in existing_list}
-    merged = list(existing_list)
-    for tmpl in template_list:
-        if tmpl.get("name") not in existing_names:
-            merged.append(copy.deepcopy(tmpl))
+def merge_system_defs(existing, template):
+    """existing에 없는 항목을 template에서 채워 넣습니다 (새 EasyRPG 옵션 자동 반영)."""
+    merged = copy.deepcopy(existing)
+    for key, tmpl in template.items():
+        if key not in merged:
+            merged[key] = copy.deepcopy(tmpl)
     return merged
 
 
@@ -97,40 +125,56 @@ ITEM_TYPE_NAMES = {
 TYPE_LABEL_MAP = {"int": "정수", "bool": "체크박스", "enum": "콤보박스", "list": "체크+순서"}
 
 # ---- 시스템 옵션 기본 정의 (최초 설치 시 config.json 시드 데이터로 사용) ----
-DEFAULT_SYSTEM_DEFS = [
-    {"name": "easyrpg_max_savefiles", "label": "최대 세이브 파일 수", "type": "int",
-     "value": 15, "default": 15, "max": 999},
-    {"name": "easyrpg_max_item_count", "label": "기본 아이템 소지 한도", "type": "int",
-     "value": 99, "default": 99, "max": 255},
-    {"name": "easyrpg_max_level", "label": "최대 레벨", "type": "int",
-     "value": -1, "default": -1, "max": 9999},
-    {"name": "easyrpg_use_rpg2k_battle_commands", "label": "RPG2K 전투 명령어 사용", "type": "bool",
-     "value": False, "default": False},
-    {"name": "easyrpg_default_actorai", "label": "기본 아군 AI", "type": "enum",
-     "value": -1, "default": -1,
-     "options": [
-         {"value": -1, "label": "기본값"},
-         {"value": 0, "label": "RPG_RT (원작 엔진과 동일, 버그 포함)"},
-         {"value": 1, "label": "RPG_RT+ (원작 기반 + AI 버그 수정)"},
-         {"value": 2, "label": "ATTACK (일반 공격만 수행)"},
-     ]},
-    {"name": "easyrpg_default_enemyai", "label": "기본 적 AI", "type": "enum",
-     "value": -1, "default": -1,
-     "note": "ATTACK(2)은 적에게는 적용되지 않습니다.",
-     "options": [
-         {"value": -1, "label": "기본값"},
-         {"value": 0, "label": "RPG_RT (원작 엔진과 동일, 버그 포함)"},
-         {"value": 1, "label": "RPG_RT+ (원작 기반 + AI 버그 수정)"},
-         {"value": 2, "label": "ATTACK (일반 공격만 수행)"},
-     ]},
-    {"name": "easyrpg_battle_options", "label": "전투 옵션", "type": "list",
-     "value": [0, 1, 2], "default": [0, 1, 2],
-     "options": [
-         {"value": 0, "label": "Battle"},
-         {"value": 1, "label": "Auto Battle"},
-         {"value": 2, "label": "Escape"},
-     ]},
-]
+DEFAULT_SYSTEM_DEFS = {
+    "easyrpg_max_savefiles": {
+        "type": "int", "name": "최대 세이브 파일 수",
+        "description": "저장 가능한 세이브 파일 개수의 상한입니다.",
+        "value": 15, "default": 15, "max": 99,
+    },
+    "easyrpg_max_item_count": {
+        "type": "int", "name": "기본 아이템 소지 한도",
+        "description": "개별 설정이 없는 아이템에 적용되는 기본 소지 한도입니다.",
+        "value": 99, "default": 99, "max": 250,
+    },
+    "easyrpg_max_level": {
+        "type": "int", "name": "최대 레벨",
+        "description": "캐릭터가 도달할 수 있는 최대 레벨입니다. -1은 순정 기본값을 의미합니다.",
+        "value": -1, "default": -1, "max": 9999,
+    },
+    "easyrpg_use_rpg2k_battle_commands": {
+        "type": "bool", "name": "RPG2000 전투 명령 사용",
+        "description": "RPG Maker 2000 방식의 전투 명령 세트를 사용합니다.",
+        "value": False, "default": False,
+    },
+    "easyrpg_default_actorai": {
+        "type": "enum", "name": "기본 아군 AI",
+        "description": "별도 AI 지정이 없는 아군 전투원에게 적용되는 기본 AI입니다.",
+        "value": -1, "default": -1,
+        "options": {
+            "-1": "기본값",
+            "0": "RPG_RT (원작 엔진과 동일, 버그 포함)",
+            "1": "RPG_RT+ (원작 기반 + AI 버그 수정)",
+            "2": "ATTACK (일반 공격만 수행)",
+        },
+    },
+    "easyrpg_default_enemyai": {
+        "type": "enum", "name": "기본 적 AI",
+        "description": "별도 AI 지정이 없는 적에게 적용되는 기본 AI입니다. ATTACK(2)은 적에게는 적용되지 않습니다.",
+        "value": -1, "default": -1,
+        "options": {
+            "-1": "기본값",
+            "0": "RPG_RT (원작 엔진과 동일, 버그 포함)",
+            "1": "RPG_RT+ (원작 기반 + AI 버그 수정)",
+            "2": "ATTACK (일반 공격만 수행)",
+        },
+    },
+    "easyrpg_battle_options": {
+        "type": "list", "name": "전투 명령",
+        "description": "전투 중 사용 가능한 명령과 그 순서입니다.",
+        "value": [0, 1, 2], "default": [0, 1, 2],
+        "options": {"0": "Battle", "1": "Auto Battle", "2": "Escape"},
+    },
+}
 
 
 class PureEdbEasyRpgPatcher:
@@ -148,7 +192,7 @@ class PureEdbEasyRpgPatcher:
         self.edb_master_items = {}
         self.edb_master_item_types = {}
         self.edb_master_skills = {}
-        self.current_config = {"system_limits": [], "items": [], "skills": []}
+        self.current_config = {"system_limits": {}, "items": [], "skills": []}
 
         self.apply_dark_theme()
         self.root.withdraw()
@@ -294,9 +338,12 @@ class PureEdbEasyRpgPatcher:
             if key not in self.common_config:
                 self.common_config[key] = val
                 changed = True
-        if not isinstance(self.common_config.get("system_limits"), list) or not self.common_config["system_limits"]:
+        if not isinstance(self.common_config.get("system_limits"), dict) or not self.common_config["system_limits"]:
             self.common_config["system_limits"] = copy.deepcopy(DEFAULT_SYSTEM_DEFS)
             changed = True
+        else:
+            self.common_config["system_limits"] = migrate_system_limits(self.common_config["system_limits"])
+            self.common_config["system_limits"] = merge_system_defs(self.common_config["system_limits"], DEFAULT_SYSTEM_DEFS)
         if changed:
             self.save_common_config()
 
@@ -318,7 +365,7 @@ class PureEdbEasyRpgPatcher:
         if "items" not in self.current_config: self.current_config["items"] = []
         if "skills" not in self.current_config: self.current_config["skills"] = []
 
-        migrated = migrate_system_limits(self.current_config.get("system_limits", []))
+        migrated = migrate_system_limits(self.current_config.get("system_limits", {}))
         merged = merge_system_defs(migrated, self.common_config.get("system_limits", DEFAULT_SYSTEM_DEFS))
         self.current_config["system_limits"] = merged
 
@@ -328,7 +375,7 @@ class PureEdbEasyRpgPatcher:
         return self.write_json_safe(self.project_config_file, self.current_config)
 
     def find_sys_def(self, name):
-        return next((d for d in self.current_config.get("system_limits", []) if d.get("name") == name), None)
+        return self.current_config.get("system_limits", {}).get(name)
 
     # ------------------------------------------------------------------
     # 다크 테마
@@ -621,11 +668,11 @@ class PureEdbEasyRpgPatcher:
             self.skill_tree.insert("", "end", values=(sid, name, crit, dmg, phys, mag))
 
         for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
-        for defn in self.current_config.get("system_limits", []):
-            if defn.get("name") == "easyrpg_max_item_count":
+        for key, defn in self.current_config.get("system_limits", {}).items():
+            if key == "easyrpg_max_item_count":
                 continue
             self.sys_tree.insert("", "end", values=(
-                defn.get("name"), defn.get("label", defn.get("name")),
+                key, defn.get("name", key),
                 TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
             ))
@@ -636,11 +683,11 @@ class PureEdbEasyRpgPatcher:
         if t == "bool":
             return "사용" if val else "미사용"
         if t == "enum":
-            opt = next((o for o in defn.get("options", []) if o.get("value") == val), None)
-            return f'{val} ({opt["label"]})' if opt else str(val)
+            label = defn.get("options", {}).get(str(val))
+            return f'{val} ({label})' if label else str(val)
         if t == "list":
-            label_map = {o.get("value"): o.get("label") for o in defn.get("options", [])}
-            return " → ".join(label_map.get(v, str(v)) for v in (val or [])) or "(없음)"
+            options = defn.get("options", {})
+            return " → ".join(options.get(str(v), str(v)) for v in (val or [])) or "(없음)"
         return "순정 한계 (-1)" if val == -1 else f"{val:,}"
 
     # ------------------------------------------------------------------
@@ -689,21 +736,23 @@ class PureEdbEasyRpgPatcher:
         if not selected: return
         vals = self.sys_tree.item(selected)['values']
         if not vals: return
-        defn = self.find_sys_def(str(vals[0]))
+        key = str(vals[0])
+        defn = self.find_sys_def(key)
         if defn:
-            self.render_sys_detail(defn)
+            self.render_sys_detail(key, defn)
 
-    def render_sys_detail(self, defn):
+    def render_sys_detail(self, key, defn):
         for w in self.sys_detail_frame.winfo_children():
             w.destroy()
+        self._current_sys_key = key
         self._current_sys_def = defn
         t = defn.get("type", "int")
 
-        ttk.Label(self.sys_detail_frame, text=defn.get("label", defn.get("name")),
+        ttk.Label(self.sys_detail_frame, text=defn.get("name", key),
                   font=("Segoe UI", 11, "bold"), wraplength=240).pack(anchor="w", pady=(0, 2))
-        ttk.Label(self.sys_detail_frame, text=defn.get("name"), foreground=FG_DIM).pack(anchor="w", pady=(0, 8))
-        if defn.get("note"):
-            ttk.Label(self.sys_detail_frame, text=defn["note"], foreground="#e0b400",
+        ttk.Label(self.sys_detail_frame, text=key, foreground=FG_DIM).pack(anchor="w", pady=(0, 6))
+        if defn.get("description"):
+            ttk.Label(self.sys_detail_frame, text=defn["description"], foreground=FG_DIM,
                       wraplength=240).pack(anchor="w", pady=(0, 8))
 
         if t == "int":
@@ -719,11 +768,12 @@ class PureEdbEasyRpgPatcher:
                                    command=self.apply_sys_bool).pack(anchor="w")
 
         elif t == "enum":
-            options = defn.get("options", [])
-            labels = [f'{o["value"]} : {o["label"]}' for o in options]
+            options = defn.get("options", {})
+            items = sorted(options.items(), key=lambda kv: int(kv[0]))
+            labels = [f"{k} : {v}" for k, v in items]
             self.sys_enum_var = tk.StringVar()
             current_val = defn.get("value", -1)
-            cur_label = next((lbl for o, lbl in zip(options, labels) if o["value"] == current_val),
+            cur_label = next((f"{k} : {v}" for k, v in items if int(k) == current_val),
                               labels[0] if labels else "")
             self.sys_enum_var.set(cur_label)
             combo = ttk.Combobox(self.sys_detail_frame, textvariable=self.sys_enum_var,
@@ -732,15 +782,17 @@ class PureEdbEasyRpgPatcher:
             ttk.Button(self.sys_detail_frame, text="✏️ 적용", command=self.apply_sys_enum).pack(fill="x")
 
         elif t == "list":
-            options = defn.get("options", [])
+            options = defn.get("options", {})
+            options_sorted = sorted(options.items(), key=lambda kv: int(kv[0]))
             current_vals = defn.get("value", []) or []
             self.sys_list_vars = {}
             self.sys_list_order = [v for v in current_vals]
 
-            for o in options:
-                var = tk.BooleanVar(value=o["value"] in current_vals)
-                self.sys_list_vars[o["value"]] = var
-                self.make_checkbutton(self.sys_detail_frame, o["label"], var,
+            for k_str, label in options_sorted:
+                v = int(k_str)
+                var = tk.BooleanVar(value=v in current_vals)
+                self.sys_list_vars[v] = var
+                self.make_checkbutton(self.sys_detail_frame, label, var,
                                        command=self.refresh_sys_list_order).pack(anchor="w")
 
             ttk.Label(self.sys_detail_frame, text="적용 순서:").pack(anchor="w", pady=(10, 2))
@@ -768,7 +820,7 @@ class PureEdbEasyRpgPatcher:
         self._current_sys_def["value"] = val
         self.save_config()
         self.update_ui_tables()
-        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('label')}] 값이 저장되었습니다.")
+        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('name')}] 값이 저장되었습니다.")
 
     def apply_sys_bool(self):
         self._current_sys_def["value"] = bool(self.sys_bool_var.get())
@@ -785,7 +837,7 @@ class PureEdbEasyRpgPatcher:
         self._current_sys_def["value"] = val
         self.save_config()
         self.update_ui_tables()
-        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('label')}] 값이 저장되었습니다.")
+        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('name')}] 값이 저장되었습니다.")
 
     def refresh_sys_list_order(self):
         checked = [v for v, var in self.sys_list_vars.items() if var.get()]
@@ -798,9 +850,9 @@ class PureEdbEasyRpgPatcher:
 
     def redraw_sys_list_order_box(self):
         self.sys_list_order_box.delete(0, tk.END)
-        label_map = {o.get("value"): o.get("label") for o in self._current_sys_def.get("options", [])}
+        options = self._current_sys_def.get("options", {})
         for v in self.sys_list_order:
-            self.sys_list_order_box.insert(tk.END, label_map.get(v, str(v)))
+            self.sys_list_order_box.insert(tk.END, options.get(str(v), str(v)))
 
     def move_sys_list_item(self, direction):
         sel = self.sys_list_order_box.curselection()
@@ -816,12 +868,12 @@ class PureEdbEasyRpgPatcher:
         self._current_sys_def["value"] = list(self.sys_list_order)
         self.save_config()
         self.update_ui_tables()
-        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('label')}] 값이 저장되었습니다.")
+        messagebox.showinfo("적용됨", f"[{self._current_sys_def.get('name')}] 값이 저장되었습니다.")
 
     def reset_sys_limits(self):
         if not messagebox.askyesno("전체 초기화", "모든 시스템 항목을 기본값으로 되돌리시겠습니까?"): return
-        for defn in self.current_config.get("system_limits", []):
-            if defn.get("name") == "easyrpg_max_item_count":
+        for key, defn in self.current_config.get("system_limits", {}).items():
+            if key == "easyrpg_max_item_count":
                 continue
             if "default" in defn:
                 defn["value"] = copy.deepcopy(defn["default"])
@@ -1002,9 +1054,7 @@ class PureEdbEasyRpgPatcher:
             _node = system_container.find("System")
             actual_system_node = _node if _node is not None else system_container.find("system")
             if actual_system_node is not None:
-                for defn in self.current_config.get("system_limits", []):
-                    key = defn.get("name")
-                    if not key: continue
+                for key, defn in self.current_config.get("system_limits", {}).items():
                     t = defn.get("type", "int")
                     val = defn.get("value")
                     if t == "bool":
