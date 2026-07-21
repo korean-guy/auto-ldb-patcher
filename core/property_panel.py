@@ -16,8 +16,12 @@ from tkinter import ttk
 
 from core.theme import BG, BG2, FG, FG_DIM, BORDER, make_checkbutton
 
+# System/Skill/Item 탭이 공통으로 사용하는 속성 편집기 고정 크기
+DETAIL_WIDTH = 320
+DETAIL_HEIGHT = 560
 
-def make_fixed_scroll_panel(parent, width=300, height=520):
+
+def make_fixed_scroll_panel(parent, width=DETAIL_WIDTH, height=DETAIL_HEIGHT):
     """크기가 고정된 스크롤 패널을 만들어 (outer, inner) 프레임을 반환합니다.
     위젯은 inner 안에 pack()하면 됩니다. inner의 내용이 늘어나도 outer 크기는 고정입니다."""
     outer = tk.Frame(parent, bg=BG, width=width, height=height,
@@ -41,12 +45,68 @@ def make_fixed_scroll_panel(parent, width=300, height=520):
 
     def _on_mousewheel(event):
         canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-    canvas.bind("<MouseWheel>", _on_mousewheel)
+
+    # 마우스가 패널 위에 있는 동안에만 전역으로 휠 이벤트를 가로챕니다.
+    # (canvas 위젯에만 바인딩하면 그 위에 올라간 내부 위젯(Entry/Label 등)에
+    #  마우스가 올라갔을 때는 휠 이벤트가 canvas까지 전달되지 않아 스크롤이
+    #  먹통이 되므로, outer 진입/이탈 시점에 bind_all로 켜고 끕니다.)
+    def _activate(event):
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+
+    def _deactivate(event):
+        canvas.unbind_all("<MouseWheel>")
+        canvas.unbind_all("<Button-4>")
+        canvas.unbind_all("<Button-5>")
+
+    outer.bind("<Enter>", _activate)
+    outer.bind("<Leave>", _deactivate)
+
+    def _on_key_scroll(event):
+        if event.keysym == "Prior":
+            canvas.yview_scroll(-1, "pages")
+        elif event.keysym == "Next":
+            canvas.yview_scroll(1, "pages")
+        elif event.keysym == "Up":
+            canvas.yview_scroll(-1, "units")
+        elif event.keysym == "Down":
+            canvas.yview_scroll(1, "units")
+
+    canvas.bind("<Key-Prior>", _on_key_scroll)
+    canvas.bind("<Key-Next>", _on_key_scroll)
+    canvas.bind("<Key-Up>", _on_key_scroll)
+    canvas.bind("<Key-Down>", _on_key_scroll)
 
     canvas.pack(side="left", fill="both", expand=True)
     vsb.pack(side="right", fill="y")
 
+    outer.scroll_canvas = canvas  # 렌더링 후 스크롤 위치 제어(맨 위로 리셋, 특정 그룹으로 이동 등)에 사용
     return outer, inner
+
+
+def scroll_panel_to_top(outer):
+    """패널 내용을 다시 그린 뒤 이전 스크롤 위치가 남아 하단(또는 엉뚱한 위치)이
+    보이는 문제를 막기 위해, 스크롤 위치를 맨 위로 되돌립니다."""
+    canvas = getattr(outer, "scroll_canvas", None)
+    if canvas is not None:
+        canvas.yview_moveto(0)
+
+
+def scroll_panel_to_widget(outer, widget):
+    """패널 안의 특정 위젯(예: 그룹 헤더)이 보이도록 스크롤 위치를 이동합니다."""
+    canvas = getattr(outer, "scroll_canvas", None)
+    if canvas is None or widget is None:
+        return
+    canvas.update_idletasks()
+    bbox = canvas.bbox("all")
+    if not bbox:
+        return
+    total_height = bbox[3] - bbox[1]
+    if total_height <= 0:
+        return
+    fraction = max(0.0, min(1.0, widget.winfo_y() / total_height))
+    canvas.yview_moveto(fraction)
 
 
 def render_group_header(parent, text):

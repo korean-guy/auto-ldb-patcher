@@ -12,13 +12,11 @@ import copy
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from core.theme import FG_DIM, attach_tree_scrollbar, make_listbox_with_scroll, make_checkbutton
-from core.property_panel import make_fixed_scroll_panel, render_field_row, render_group_header
+from core.theme import FG_DIM, attach_tree_scrollbar, make_listbox_with_scroll, make_checkbutton, enable_column_sort, enable_column_width_persistence
+from core.property_panel import make_fixed_scroll_panel, render_field_row, render_group_header, scroll_panel_to_top, DETAIL_WIDTH, DETAIL_HEIGHT
 from core.logger import log
 
 TYPE_LABEL_MAP = {"int": "정수", "bool": "체크박스", "enum": "콤보박스", "list": "체크+순서"}
-DETAIL_WIDTH = 300
-DETAIL_HEIGHT = 560
 
 
 class SystemTab:
@@ -51,20 +49,22 @@ class SystemTab:
 
         tree_row = ttk.Frame(left_frame)
         tree_row.pack(fill="both", expand=True)
-        self.sys_tree = ttk.Treeview(tree_row, columns=("필드명", "이름", "그룹", "타입", "현재값"),
-                                      show="headings", height=18)
-        for col, txt in [("필드명", "필드명"), ("이름", "옵션명"), ("그룹", "그룹"),
-                          ("타입", "타입"), ("현재값", "현재값")]:
+        columns = ("이름", "그룹", "타입", "현재값", "최대값")
+        self.sys_tree = ttk.Treeview(tree_row, columns=columns, show="headings", height=18)
+        for col, txt in [("이름", "옵션명"), ("그룹", "그룹"), ("타입", "타입"),
+                          ("현재값", "현재값"), ("최대값", "최대값")]:
             self.sys_tree.heading(col, text=txt)
         self.sys_tree.pack(fill="both", expand=True, side="left")
         attach_tree_scrollbar(self.sys_tree, tree_row)
 
-        self.sys_tree.column("필드명", width=200, anchor="w")
-        self.sys_tree.column("이름", width=150, anchor="w")
+        self.sys_tree.column("이름", width=170, anchor="w")
         self.sys_tree.column("그룹", width=80, anchor="center")
         self.sys_tree.column("타입", width=80, anchor="center")
         self.sys_tree.column("현재값", width=150, anchor="w")
+        self.sys_tree.column("최대값", width=110, anchor="w")
         self.sys_tree.bind("<<TreeviewSelect>>", self.on_sys_select)
+        enable_column_sort(self.sys_tree, columns, numeric_columns=("최대값",))
+        enable_column_width_persistence(self.sys_tree, self.cfg, "sys_tree")
 
         sys_side_frame = ttk.Frame(sys_frame, padding=(10, 0))
         sys_side_frame.pack(fill="y", side="right")
@@ -94,6 +94,9 @@ class SystemTab:
         if self.group_filter_var.get() not in self._all_groups():
             self.group_filter_var.set("전체")
 
+        selected = self.sys_tree.selection()
+        prev_iid = selected[0] if selected else None
+
         for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
         active_group = self.group_filter_var.get()
         for key, defn in self.cfg.current_config.get("system_limits", {}).items():
@@ -102,11 +105,16 @@ class SystemTab:
             group = defn.get("group", "일반")
             if active_group != "전체" and group != active_group:
                 continue
-            self.sys_tree.insert("", "end", values=(
-                key, defn.get("name", key), group,
+            self.sys_tree.insert("", "end", iid=key, values=(
+                defn.get("name", key), group,
                 TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
+                self.format_sys_max(defn),
             ))
+
+        if prev_iid and self.sys_tree.exists(prev_iid):
+            self.sys_tree.selection_set(prev_iid)
+            self.sys_tree.see(prev_iid)
 
     def format_sys_value(self, defn):
         t = defn.get("type", "int")
@@ -121,6 +129,17 @@ class SystemTab:
             return " → ".join(options.get(str(v), str(v)) for v in (val or [])) or "(없음)"
         return "순정 한계 (-1)" if val == -1 else f"{val:,}"
 
+    def format_sys_max(self, defn):
+        if defn.get("type") != "int":
+            return "-"
+        max_val = defn.get("max")
+        if max_val is None:
+            return "-"
+        try:
+            return f"{max_val:,}"
+        except (TypeError, ValueError):
+            return str(max_val)
+
     def find_sys_def(self, name):
         return self.cfg.find_sys_def(name)
 
@@ -130,9 +149,7 @@ class SystemTab:
     def on_sys_select(self, event):
         selected = self.sys_tree.selection()
         if not selected: return
-        vals = self.sys_tree.item(selected)['values']
-        if not vals: return
-        key = str(vals[0])
+        key = selected[0]
         defn = self.find_sys_def(key)
         if defn:
             self.render_sys_detail(key, defn)
@@ -165,6 +182,8 @@ class SystemTab:
 
         elif t == "list":
             self._render_list_field(body, defn)
+
+        scroll_panel_to_top(self.detail_outer)
 
     def _render_list_field(self, parent, defn):
         options = defn.get("options", {})

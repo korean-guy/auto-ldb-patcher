@@ -40,13 +40,14 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("EasyRPG DB Editor (Dynamic External Plugin Version)")
-        self.root.geometry("1150x1300")
+        self.root.geometry("1200x1300")
         self._init_ok = False
 
         self.cfg = ConfigManager(get_program_dir())
         self.edb_master_items = {}
         self.edb_master_item_types = {}
         self.edb_master_skills = {}
+        self.edb_master_skill_stats = {}
         self.tabs = []
 
         apply_dark_theme(self.root)
@@ -76,11 +77,12 @@ class App:
     # edb 동기화 (core.lcf 위임)
     # ------------------------------------------------------------------
     def sync_edb_master_data(self):
-        items, item_types, skills = lcf.decompile_and_parse_edb_directly(self.cfg)
+        items, item_types, skills, skill_stats = lcf.decompile_and_parse_edb_directly(self.cfg)
         if items is not None:
             self.edb_master_items = items
             self.edb_master_item_types = item_types
             self.edb_master_skills = skills
+            self.edb_master_skill_stats = skill_stats
 
     def notify_tabs_project_loaded(self):
         """탭이 프로젝트별 마이그레이션(예: 예전 스킬 저장 형식 변환)이 필요하면

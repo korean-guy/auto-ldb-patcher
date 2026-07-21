@@ -76,3 +76,59 @@ def make_checkbutton(parent, text, variable, command=None):
     return tk.Checkbutton(parent, text=text, variable=variable, command=command,
                            bg=BG, fg=FG, selectcolor=BG2, activebackground=BG,
                            activeforeground=FG, highlightthickness=0)
+
+
+def enable_column_sort(tree, columns, numeric_columns=None):
+    """트리뷰 헤더를 클릭하면 해당 컬럼 기준으로 오름/내림차순 정렬합니다."""
+    numeric_columns = set(numeric_columns or [])
+    state = {"col": None, "reverse": False}
+
+    def _sort(col):
+        rows = [(tree.set(k, col), k) for k in tree.get_children("")]
+
+        def keyfunc(pair):
+            val = str(pair[0])
+            if col in numeric_columns:
+                try:
+                    return (0, float(val.replace(",", "")))
+                except ValueError:
+                    return (-1, 0.0)
+            return (0, val)
+
+        reverse = (not state["reverse"]) if state["col"] == col else False
+        rows.sort(key=keyfunc, reverse=reverse)
+        for index, (_, k) in enumerate(rows):
+            tree.move(k, "", index)
+        state["col"] = col
+        state["reverse"] = reverse
+
+    for col in columns:
+        tree.heading(col, command=lambda c=col: _sort(c))
+
+
+def enable_column_width_persistence(tree, cfg, storage_key):
+    """트리뷰 컬럼 폭을 공통 설정(config.json)에 저장했다가 다음 실행 시 복원합니다."""
+    saved = cfg.common_config.setdefault("settings", {}).setdefault("column_widths", {}).get(storage_key, {})
+    for col, w in saved.items():
+        try:
+            tree.column(col, width=int(w))
+        except Exception:
+            pass
+
+    def _save(event=None):
+        widths = {col: tree.column(col, "width") for col in tree["columns"]}
+        cfg.common_config.setdefault("settings", {}).setdefault("column_widths", {})[storage_key] = widths
+        cfg.save_common_config()
+
+    tree.bind("<ButtonRelease-1>", _save, add="+")
+
+
+def remember_selection(tree, refresh_func):
+    """refresh_func()로 트리뷰를 다시 채우되, 이전에 선택되어 있던 행(iid)을 그대로 복원합니다.
+    트리뷰 insert 시 iid를 명시적으로 지정해 둔 경우에만 정상 동작합니다."""
+    selected = tree.selection()
+    prev_iid = selected[0] if selected else None
+    refresh_func()
+    if prev_iid and tree.exists(prev_iid):
+        tree.selection_set(prev_iid)
+        tree.see(prev_iid)

@@ -102,7 +102,7 @@
       "description": "게임 변수의 최소값입니다.",
       "value": -1,
       "default": -1,
-      "max": -2147483647
+      "max": 2147483646
     },
     "easyrpg_variable_max_value": {
       "type": "int",

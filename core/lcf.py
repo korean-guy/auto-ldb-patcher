@@ -13,6 +13,7 @@ from tkinter import messagebox
 
 from core.logger import log
 from core.skill_schema import SKILL_FIELD_DEFS
+from core.item_schema import ITEM_FIELD_DEFS
 
 
 def run_lcf2xml(cfg, target_file):
@@ -34,22 +35,23 @@ def run_lcf2xml(cfg, target_file):
 
 def decompile_and_parse_edb_directly(cfg):
     """RPG_RT.ldb -> RPG_RT.edb 로 역변환하고, 아이템/스킬 마스터 정보를 파싱합니다.
-    반환값: (edb_master_items, edb_master_item_types, edb_master_skills) - 실패 시 (None, None, None)"""
+    반환값: (edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats)
+    실패 시 (None, None, None, None)"""
     if not os.path.exists(cfg.ldb_file):
-        return None, None, None
+        return None, None, None, None
 
     log.info("RPG_RT.ldb → RPG_RT.edb 변환 중...")
     if not run_lcf2xml(cfg, cfg.ldb_file):
-        return None, None, None
+        return None, None, None, None
     if not os.path.exists(cfg.edb_file):
         messagebox.showerror(
             "실패",
             "RPG_RT.edb 파일이 생성되지 않았습니다.\nlcf2xml 변환이 정상적으로 끝나지 않은 것 같습니다."
         )
-        return None, None, None
+        return None, None, None, None
 
     log.info("edb(XML)에서 아이템/스킬 정보 파싱 중...")
-    edb_master_items, edb_master_item_types, edb_master_skills = {}, {}, {}
+    edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats = {}, {}, {}, {}
     try:
         with open(cfg.edb_file, "r", encoding="utf-8") as f:
             xml_text = f.read()
@@ -69,12 +71,19 @@ def decompile_and_parse_edb_directly(cfg):
             name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
             edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
 
+            stats = {}
+            for tag in ("rating", "physical_rate", "magical_rate"):
+                m = re.search(rf'<{tag}>(.*?)</{tag}>', block, re.DOTALL | re.IGNORECASE)
+                if m and m.group(1).strip().lstrip("-").isdigit():
+                    stats[tag] = int(m.group(1).strip())
+            edb_master_skill_stats[sid] = stats
+
         log.info(f"동기화 완료: 아이템 {len(edb_master_items)}개, 스킬 {len(edb_master_skills)}개 인식")
-        return edb_master_items, edb_master_item_types, edb_master_skills
+        return edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats
     except Exception as e:
         log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"RPG_RT.edb 파일을 분석하는 중 오류가 발생했습니다.\n{e}")
-        return None, None, None
+        return None, None, None, None
 
 
 def apply_final_patch(cfg):
@@ -120,9 +129,16 @@ def apply_final_patch(cfg):
                     for item_node in el.findall("Item") + el.findall("item"):
                         nid = item_node.get("id") or (item_node.find("id").text if item_node.find("id") is not None else None)
                         if nid and int(nid) == it["id"]:
-                            tag = item_node.find("easyrpg_max_count")
-                            if tag is not None: tag.text = str(it["easyrpg_max_count"])
-                            else: ET.SubElement(item_node, "easyrpg_max_count").text = str(it["easyrpg_max_count"])
+                            fields = it.get("fields", {})
+                            for fd in ITEM_FIELD_DEFS:
+                                name = fd["name"]
+                                if name not in fields:
+                                    continue
+                                val = fields[name]
+                                text_val = "T" if (fd.get("type") == "bool" and val) else ("F" if fd.get("type") == "bool" else str(val))
+                                tag = item_node.find(name)
+                                if tag is not None: tag.text = text_val
+                                else: ET.SubElement(item_node, name).text = text_val
             if t_low == "skills" or t_low == "skills_container" or t_low == "skill_container":
                 for sk in cfg.current_config.get("skills", []):
                     for skill_node in el.findall("Skill") + el.findall("skill"):

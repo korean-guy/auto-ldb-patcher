@@ -65,7 +65,7 @@ DEFAULT_SYSTEM_DEFS = {
     "easyrpg_variable_min_value": {
         "type": "int", "name": "변수 최소값", "group": "일반",
         "description": "게임 변수의 최소값입니다.",
-        "value": -1, "default": -1, "max": -2147483647,
+        "value": -1, "default": -1, "max": 2147483646,
     },
     "easyrpg_variable_max_value": {
         "type": "int", "name": "변수 최대값", "group": "일반",
