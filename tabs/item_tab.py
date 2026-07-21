@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from core.theme import attach_tree_scrollbar, make_listbox_with_scroll
+from core.logger import log
 
 ITEM_TYPE_NAMES = {
     0: "일반", 1: "무기", 2: "방패", 3: "갑옷", 4: "투구", 5: "악세사리",
@@ -59,7 +60,7 @@ class ItemTab:
 
         ttk.Label(item_btn_frame, text="일괄 설정 (등록된 항목만)").pack(anchor="w", pady=(20, 4))
         ttk.Button(item_btn_frame, text="🗑️ 전체삭제", command=self.batch_clear_items).pack(fill="x", pady=2)
-        ttk.Button(item_btn_frame, text="↩️ 기본값 (99)", command=lambda: self.batch_set_items(99)).pack(fill="x", pady=2)
+        ttk.Button(item_btn_frame, text="↩️ 기본값 (-1, 미설정)", command=lambda: self.batch_set_items(-1)).pack(fill="x", pady=2)
         ttk.Button(item_btn_frame, text="⬆️ 최대값 (255)", command=lambda: self.batch_set_items(255)).pack(fill="x", pady=2)
 
     # ------------------------------------------------------------------
@@ -117,6 +118,7 @@ class ItemTab:
             self.cfg.current_config["items"].append({"id": iid, "easyrpg_max_count": val})
             self.cfg.save_config()
             self.app.refresh_all_tabs()
+            log.info(f"아이템 규칙 저장 완료 (ID {iid})")
         except ValueError:
             messagebox.showerror("에러", "ID와 수치는 정수 숫자로 입력해 주세요.")
 
@@ -128,6 +130,7 @@ class ItemTab:
         self.cfg.current_config["items"] = [i for i in self.cfg.current_config["items"] if i["id"] != iid]
         self.cfg.save_config()
         self.app.refresh_all_tabs()
+        log.info(f"아이템 규칙 삭제 (ID {iid})")
 
     def batch_clear_items(self):
         if not self.cfg.current_config["items"]:
@@ -137,6 +140,7 @@ class ItemTab:
         self.cfg.current_config["items"] = []
         self.cfg.save_config()
         self.app.refresh_all_tabs()
+        log.info("아이템 규칙 전체 삭제")
 
     def batch_set_items(self, value):
         if not self.cfg.current_config["items"]:
@@ -147,3 +151,4 @@ class ItemTab:
         self.cfg.save_config()
         self.app.refresh_all_tabs()
         messagebox.showinfo("완료", f"등록된 아이템 {len(self.cfg.current_config['items'])}개의 최대 수량을 {value}(으)로 일괄 설정했습니다.")
+        log.info(f"아이템 일괄 설정 완료: {value}")

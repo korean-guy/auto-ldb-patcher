@@ -11,6 +11,9 @@ import subprocess
 import xml.etree.ElementTree as ET
 from tkinter import messagebox
 
+from core.logger import log
+from core.skill_schema import SKILL_FIELD_DEFS
+
 
 def run_lcf2xml(cfg, target_file):
     """lcf2xml.exe를 target_file에 대해 실행합니다. 실패 시 사용자 메시지를 띄우고 False를 반환합니다."""
@@ -24,7 +27,7 @@ def run_lcf2xml(cfg, target_file):
         messagebox.showerror("실패", f"lcf2xml 변환 중 오류가 발생했습니다. (종료 코드: {e.returncode})")
         return False
     except Exception as e:
-        print("---- 상세 오류 ----"); traceback.print_exc()
+        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"lcf2xml 실행 중 알 수 없는 오류가 발생했습니다.\n{e}")
         return False
 
@@ -35,7 +38,7 @@ def decompile_and_parse_edb_directly(cfg):
     if not os.path.exists(cfg.ldb_file):
         return None, None, None
 
-    print("[동기화] 최신 RPG_RT.edb 역변환 확보 중...")
+    log.info("RPG_RT.ldb → RPG_RT.edb 변환 중...")
     if not run_lcf2xml(cfg, cfg.ldb_file):
         return None, None, None
     if not os.path.exists(cfg.edb_file):
@@ -45,7 +48,7 @@ def decompile_and_parse_edb_directly(cfg):
         )
         return None, None, None
 
-    print("[파싱] edb(XML) 내부에서 실시간으로 정보 색출 중...")
+    log.info("edb(XML)에서 아이템/스킬 정보 파싱 중...")
     edb_master_items, edb_master_item_types, edb_master_skills = {}, {}, {}
     try:
         with open(cfg.edb_file, "r", encoding="utf-8") as f:
@@ -66,10 +69,10 @@ def decompile_and_parse_edb_directly(cfg):
             name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
             edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
 
-        print(f"[동기화 완료] 아이템: {len(edb_master_items)}개, 스킬: {len(edb_master_skills)}개 매칭 성공.")
+        log.info(f"동기화 완료: 아이템 {len(edb_master_items)}개, 스킬 {len(edb_master_skills)}개 인식")
         return edb_master_items, edb_master_item_types, edb_master_skills
     except Exception as e:
-        print("---- 상세 오류 ----"); traceback.print_exc()
+        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"RPG_RT.edb 파일을 분석하는 중 오류가 발생했습니다.\n{e}")
         return None, None, None
 
@@ -85,7 +88,7 @@ def apply_final_patch(cfg):
         tree = ET.parse(cfg.edb_file)
         root = tree.getroot()
     except Exception as e:
-        print("---- 상세 오류 ----"); traceback.print_exc()
+        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"RPG_RT.edb 파일을 읽는 중 오류가 발생했습니다.\n파일이 손상되었을 수 있습니다.\n{e}")
         return False
 
@@ -107,7 +110,7 @@ def apply_final_patch(cfg):
                 tag = actual_system_node.find(key)
                 if tag is not None: tag.text = text_val
                 else: ET.SubElement(actual_system_node, key).text = text_val
-            print(" -> 시스템 옵션 한계 해제 완료.")
+            log.info("시스템 옵션 값 적용 완료")
 
     try:
         for el in root.iter():
@@ -125,31 +128,28 @@ def apply_final_patch(cfg):
                     for skill_node in el.findall("Skill") + el.findall("skill"):
                         nid = skill_node.get("id") or (skill_node.find("id").text if skill_node.find("id") is not None else None)
                         if nid and int(nid) == sk["id"]:
-                            if sk.get("easyrpg_critical_hit_chance") != "keep":
-                                crit_tag = skill_node.find("easyrpg_critical_hit_chance")
-                                if crit_tag is not None: crit_tag.text = str(sk["easyrpg_critical_hit_chance"])
-                                else: ET.SubElement(skill_node, "easyrpg_critical_hit_chance").text = str(sk["easyrpg_critical_hit_chance"])
-                            if sk.get("rating") != "keep":
-                                r_tag = skill_node.find("rating")
-                                if r_tag is not None: r_tag.text = str(sk["rating"])
-                                else: ET.SubElement(skill_node, "rating").text = str(sk["rating"])
-                            if sk.get("physical_rate", "keep") != "keep":
-                                p_tag = skill_node.find("physical_rate")
-                                if p_tag is not None: p_tag.text = str(sk["physical_rate"])
-                                else: ET.SubElement(skill_node, "physical_rate").text = str(sk["physical_rate"])
-                            if sk.get("magical_rate", "keep") != "keep":
-                                m_tag = skill_node.find("magical_rate")
-                                if m_tag is not None: m_tag.text = str(sk["magical_rate"])
-                                else: ET.SubElement(skill_node, "magical_rate").text = str(sk["magical_rate"])
+                            fields = sk.get("fields", {})
+                            for fd in SKILL_FIELD_DEFS:
+                                name = fd["name"]
+                                if name not in fields:
+                                    continue
+                                val = fields[name]
+                                if fd.get("type") == "bool":
+                                    text_val = "T" if val else "F"
+                                else:
+                                    text_val = str(val)
+                                tag = skill_node.find(name)
+                                if tag is not None: tag.text = text_val
+                                else: ET.SubElement(skill_node, name).text = text_val
     except Exception as e:
-        print("---- 상세 오류 ----"); traceback.print_exc()
+        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"아이템/스킬 값을 적용하는 중 오류가 발생했습니다.\n{e}")
         return False
 
     try:
         tree.write(cfg.edb_file, encoding="utf-8", xml_declaration=True)
     except Exception as e:
-        print("---- 상세 오류 ----"); traceback.print_exc()
+        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
         messagebox.showerror("실패", f"RPG_RT.edb 파일 저장 중 오류가 발생했습니다.\n{e}")
         return False
 
@@ -164,8 +164,9 @@ def apply_final_patch(cfg):
         try:
             os.remove(cfg.edb_file)
         except Exception as e:
-            print(f"edb 삭제 실패: {e}")
+            log.warning(f"RPG_RT.edb 삭제 실패: {e}")
             messagebox.showwarning("알림", f"패치는 완료되었지만 RPG_RT.edb 삭제에는 실패했습니다.\n(사유: {e})\n다음 'edb로드' 시 자동으로 새로 갱신됩니다.")
 
     messagebox.showinfo("대성공", "전역 한계 해제 및 스킬/아이템 개조 패치가 완료되었습니다!\nRPG_RT.edb는 정리되었습니다. 다시 수정하려면 'edb로드'를 눌러주세요.")
+    log.info("패치 완료: RPG_RT.ldb 갱신됨")
     return True

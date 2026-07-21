@@ -3,9 +3,9 @@ auto ldb patcher.py
 프로그램 진입점 (메인 파일).
 
 이 파일이 하는 일은 다음뿐입니다:
-  1. 프로그램 시작 (사전 점검 + 게임 폴더 선택)
+  1. 프로그램 시작 (사전 점검 + RPG_RT.ldb 선택)
   2. 공통 설정 로드 (core.config.ConfigManager)
-  3. 메인 윈도우 생성
+  3. 메인 윈도우 생성 (상단 툴바 + 탭 + 하단 로그 패널)
   4. 각 탭 로드 (tabs/*.py)
   5. 저장(edb→ldb 패치) 처리 위임 (core.lcf)
 
@@ -15,14 +15,15 @@ auto ldb patcher.py
 import os
 import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 
 # 이 파일과 같은 폴더를 import 경로에 추가 (core/, tabs/ 패키지를 찾기 위함)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.utils import get_program_dir
-from core.theme import BG, FG, FG_DIM, apply_dark_theme
+from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme
 from core.config import ConfigManager
+from core.logger import log
 from core import lcf
 
 from tabs.item_tab import ItemTab
@@ -32,12 +33,14 @@ from tabs.system_tab import SystemTab
 # 새 탭은 여기에 한 줄만 추가하면 자동으로 로드됩니다.
 TAB_CLASSES = [ItemTab, SkillTab, SystemTab]
 
+LOG_PANEL_HEIGHT = 7
+
 
 class App:
     def __init__(self, root):
         self.root = root
         self.root.title("EasyRPG DB Editor (Dynamic External Plugin Version)")
-        self.root.geometry("1080x780")
+        self.root.geometry("1150x1300")
         self._init_ok = False
 
         self.cfg = ConfigManager(get_program_dir())
@@ -55,15 +58,17 @@ class App:
             self.root.destroy()
             return
 
-        if not self.cfg.select_game_folder():
+        if not self.cfg.select_project_file():
             self.root.destroy()
             return
 
         self.root.deiconify()
 
+        self.create_widgets()  # 로그 패널을 먼저 만들어야 이후 로그가 GUI에도 표시됨
         self.sync_edb_master_data()
         self.cfg.load_project_config()
-        self.create_widgets()
+        self.notify_tabs_project_loaded()
+        self.refresh_all_tabs()
         self.refresh_edb_overlay()
         self._init_ok = True
 
@@ -77,18 +82,26 @@ class App:
             self.edb_master_item_types = item_types
             self.edb_master_skills = skills
 
+    def notify_tabs_project_loaded(self):
+        """탭이 프로젝트별 마이그레이션(예: 예전 스킬 저장 형식 변환)이 필요하면
+        on_project_loaded()를 구현해두면 프로젝트를 불러올 때마다 자동 호출됩니다."""
+        for tab in self.tabs:
+            hook = getattr(tab, "on_project_loaded", None)
+            if callable(hook):
+                hook()
+
     def refresh_from_edb(self):
         self.sync_edb_master_data()
         self.refresh_all_tabs()
         self.refresh_edb_overlay()
         if os.path.exists(self.cfg.edb_file):
-            from tkinter import messagebox
             messagebox.showinfo("완료", "순정 edb에서 개체 이름들을 실시간 동기화했습니다!")
 
-    def change_game_folder(self):
-        if self.cfg.select_game_folder():
+    def change_project_file(self):
+        if self.cfg.select_project_file():
             self.sync_edb_master_data()
             self.cfg.load_project_config()
+            self.notify_tabs_project_loaded()
             self.refresh_all_tabs()
             self.refresh_edb_overlay()
             if hasattr(self, "project_label"):
@@ -105,7 +118,7 @@ class App:
         top_frame = ttk.Frame(self.root, padding=10)
         top_frame.pack(fill="x")
         ttk.Button(top_frame, text="📥 edb로드", command=self.refresh_from_edb).pack(side="left", padx=5)
-        ttk.Button(top_frame, text="🗂 게임 폴더 변경", command=self.change_game_folder).pack(side="left", padx=5)
+        ttk.Button(top_frame, text="🗂 프로젝트(ldb) 변경", command=self.change_project_file).pack(side="left", padx=5)
         self.project_label = ttk.Label(
             top_frame, text=f"프로젝트: {self.cfg.project_title}   ({self.cfg.game_dir})", foreground=FG_DIM
         )
@@ -113,7 +126,7 @@ class App:
         ttk.Button(top_frame, text="💾 저장(ldb전환)", command=self.apply_final_patch).pack(side="right", padx=5)
 
         self.body_container = ttk.Frame(self.root)
-        self.body_container.pack(fill="both", expand=True, padx=10, pady=10)
+        self.body_container.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
         self.notebook = ttk.Notebook(self.body_container)
         self.notebook.place(relx=0, rely=0, relwidth=1, relheight=1)
@@ -135,7 +148,39 @@ class App:
                  font=("Segoe UI", 11), bg=BG, fg=FG_DIM).pack(pady=(2, 16))
         ttk.Button(overlay_inner, text="📥 edb로드", command=self.refresh_from_edb).pack()
 
-        self.refresh_all_tabs()
+        self.create_log_panel()
+
+    def create_log_panel(self):
+        log_frame = ttk.Frame(self.root, padding=(10, 0, 10, 10))
+        log_frame.pack(fill="x", side="bottom")
+
+        header = ttk.Frame(log_frame)
+        header.pack(fill="x")
+        ttk.Label(header, text="로그", foreground=FG_DIM).pack(side="left")
+        ttk.Button(header, text="지우기", command=self.clear_log).pack(side="right")
+
+        text_row = tk.Frame(log_frame, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
+        text_row.pack(fill="x", pady=(4, 0))
+
+        self.log_text = tk.Text(text_row, height=LOG_PANEL_HEIGHT, bg=BG2, fg=FG,
+                                 insertbackground=FG, relief="flat", state="disabled",
+                                 wrap="word")
+        vsb = ttk.Scrollbar(text_row, orient="vertical", command=self.log_text.yview)
+        self.log_text.configure(yscrollcommand=vsb.set)
+        self.log_text.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        self.log_text.tag_configure("info", foreground=FG)
+        self.log_text.tag_configure("warning", foreground="#e0b400")
+        self.log_text.tag_configure("error", foreground="#ff6b6b")
+
+        log.attach(self.log_text)
+        log.info("EasyRPG DB Editor 시작")
+
+    def clear_log(self):
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", tk.END)
+        self.log_text.configure(state="disabled")
 
     def refresh_edb_overlay(self):
         if not hasattr(self, "overlay"):

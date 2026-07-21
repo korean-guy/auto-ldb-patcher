@@ -1,14 +1,4 @@
 {
-  "last_game_dir": "F:\\rpg maker\\game Project\\no name",
-  "recent_projects": [
-    {
-      "title": "aaa",
-      "path": "F:\\rpg maker\\game Project\\no name"
-    }
-  ],
-  "settings": {
-    "theme": "dark"
-  },
   "system_limits": {
     "easyrpg_alternative_exp": {
       "type": "enum",
@@ -212,5 +202,29 @@
       "default": -1,
       "max": 255
     }
-  }
+  },
+  "items": [],
+  "skills": [
+    {
+      "id": 1,
+      "fields": {
+        "rating": 0,
+        "physical_rate": 0,
+        "magical_rate": 0,
+        "easyrpg_critical_hit_chance": 0,
+        "easyrpg_affected_by_row_modifiers": false,
+        "easyrpg_enable_stat_absorbing": false,
+        "easyrpg_affected_by_evade_all_physical_attacks": false,
+        "easyrpg_ignore_reflect": false,
+        "easyrpg_state_hit": -1,
+        "easyrpg_attribute_hit": -1,
+        "easyrpg_ignore_restrict_skill": false,
+        "easyrpg_ignore_restrict_magic": false,
+        "easyrpg_battle2k3_message": "default_message",
+        "easyrpg_hp_type": 0,
+        "easyrpg_hp_cost": 0,
+        "easyrpg_hp_percent": 0
+      }
+    }
+  ]
 }

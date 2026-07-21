@@ -1,6 +1,6 @@
 """
 core/config.py
-JSON 읽기/쓰기, 공통/프로젝트 config 관리, 게임 폴더(프로젝트) 선택을
+JSON 읽기/쓰기, 공통/프로젝트 config 관리, 프로젝트(RPG_RT.ldb) 선택을
 모두 담당하는 ConfigManager. UI(탭)들은 이 클래스의 인스턴스(cfg)를
 공유해서 설정을 읽고 씁니다.
 """
@@ -10,57 +10,115 @@ import copy
 from tkinter import messagebox, filedialog
 
 from core.utils import get_project_title, sanitize_folder_name, migrate_system_limits, merge_system_defs
+from core.logger import log
 
 
 # ---- 시스템 옵션 기본 정의 (최초 설치 시 config.json 시드 데이터로 사용) ----
+# group: UI에서 옵션을 분류해 보여주기 위한 카테고리 (일반/전투/AI/능력치/HP·SP/변수 등)
 DEFAULT_SYSTEM_DEFS = {
-    "easyrpg_max_savefiles": {
-        "type": "int", "name": "최대 세이브 파일 수",
-        "description": "저장 가능한 세이브 파일 개수의 상한입니다.",
-        "value": 15, "default": 15, "max": 99,
+    "easyrpg_alternative_exp": {
+        "type": "enum", "name": "경험치 계산 방식", "group": "전투",
+        "description": "사용할 경험치 계산 공식을 선택합니다.",
+        "value": 0, "default": 0,
+        "options": {"0": "기본", "1": "RPG Maker 2000", "2": "RPG Maker 2003"},
     },
-    "easyrpg_max_item_count": {
-        "type": "int", "name": "기본 아이템 소지 한도",
-        "description": "개별 설정이 없는 아이템에 적용되는 기본 소지 한도입니다.",
-        "value": 99, "default": 99, "max": 250,
+    "easyrpg_max_actor_hp": {
+        "type": "int", "name": "아군 최대 HP", "group": "HP/SP",
+        "description": "아군이 가질 수 있는 최대 HP입니다. -1은 엔진 기본값을 사용합니다.",
+        "value": -1, "default": -1, "max": 2147483646,
     },
-    "easyrpg_max_level": {
-        "type": "int", "name": "최대 레벨",
-        "description": "캐릭터가 도달할 수 있는 최대 레벨입니다. -1은 순정 기본값을 의미합니다.",
-        "value": -1, "default": -1, "max": 9999,
+    "easyrpg_max_enemy_hp": {
+        "type": "int", "name": "적 최대 HP", "group": "HP/SP",
+        "description": "적이 가질 수 있는 최대 HP입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
     },
-    "easyrpg_use_rpg2k_battle_commands": {
-        "type": "bool", "name": "RPG2000 전투 명령 사용",
-        "description": "RPG Maker 2000 방식의 전투 명령 세트를 사용합니다.",
+    "easyrpg_max_actor_sp": {
+        "type": "int", "name": "아군 최대 MP", "group": "HP/SP",
+        "description": "아군이 가질 수 있는 최대 MP입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_max_enemy_sp": {
+        "type": "int", "name": "적 최대 MP", "group": "HP/SP",
+        "description": "적이 가질 수 있는 최대 MP입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_max_damage": {
+        "type": "int", "name": "최대 데미지", "group": "전투",
+        "description": "공격으로 줄 수 있는 최대 데미지입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_max_exp": {
+        "type": "int", "name": "최대 경험치", "group": "능력치",
+        "description": "캐릭터가 가질 수 있는 최대 경험치입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_max_stat_base_value": {
+        "type": "int", "name": "기본 능력치 최대값", "group": "능력치",
+        "description": "기본 능력치의 최대값입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_max_stat_battle_value": {
+        "type": "int", "name": "전투 능력치 최대값", "group": "능력치",
+        "description": "전투 중 적용되는 능력치 최대값입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_variable_min_value": {
+        "type": "int", "name": "변수 최소값", "group": "일반",
+        "description": "게임 변수의 최소값입니다.",
+        "value": -1, "default": -1, "max": -2147483647,
+    },
+    "easyrpg_variable_max_value": {
+        "type": "int", "name": "변수 최대값", "group": "일반",
+        "description": "게임 변수의 최대값입니다.",
+        "value": -1, "default": -1, "max": 2147483646,
+    },
+    "easyrpg_use_rpg2k_battle_system": {
+        "type": "bool", "name": "RPG2000 전투 시스템 사용", "group": "전투",
+        "description": "RPG Maker 2003에서도 RPG Maker 2000 전투 시스템을 사용합니다.",
         "value": False, "default": False,
     },
+    "easyrpg_battle_use_rpg2ke_strings": {
+        "type": "bool", "name": "RPG2000 전투 용어 사용", "group": "전투",
+        "description": "RPG2000 전투 시스템에서 RPG2kE 용어를 사용합니다.",
+        "value": False, "default": False,
+    },
+    "easyrpg_use_rpg2k_battle_commands": {
+        "type": "bool", "name": "RPG2000 전투 명령 사용", "group": "전투",
+        "description": "RPG2000 방식의 전투 명령을 사용합니다.",
+        "value": False, "default": False,
+    },
+    "easyrpg_max_savefiles": {
+        "type": "int", "name": "최대 세이브 파일 수", "group": "일반",
+        "description": "세이브 슬롯 개수입니다.",
+        "value": 15, "default": 15, "max": 999,
+    },
+    "easyrpg_max_item_count": {
+        "type": "int", "name": "기본 아이템 소지 한도", "group": "일반",
+        "description": "아이템별 설정이 없을 때 적용되는 기본 소지 한도입니다.",
+        "value": -1, "default": -1, "max": 255,
+    },
     "easyrpg_default_actorai": {
-        "type": "enum", "name": "기본 아군 AI",
-        "description": "별도 AI 지정이 없는 아군 전투원에게 적용되는 기본 AI입니다.",
+        "type": "enum", "name": "기본 아군 AI", "group": "AI",
+        "description": "기본적으로 사용할 아군 AI입니다.",
         "value": -1, "default": -1,
-        "options": {
-            "-1": "기본값",
-            "0": "RPG_RT (원작 엔진과 동일, 버그 포함)",
-            "1": "RPG_RT+ (원작 기반 + AI 버그 수정)",
-            "2": "ATTACK (일반 공격만 수행)",
-        },
+        "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+", "2": "ATTACK"},
     },
     "easyrpg_default_enemyai": {
-        "type": "enum", "name": "기본 적 AI",
-        "description": "별도 AI 지정이 없는 적에게 적용되는 기본 AI입니다. ATTACK(2)은 적에게는 적용되지 않습니다.",
+        "type": "enum", "name": "기본 적 AI", "group": "AI",
+        "description": "기본적으로 사용할 적 AI입니다.",
         "value": -1, "default": -1,
-        "options": {
-            "-1": "기본값",
-            "0": "RPG_RT (원작 엔진과 동일, 버그 포함)",
-            "1": "RPG_RT+ (원작 기반 + AI 버그 수정)",
-            "2": "ATTACK (일반 공격만 수행)",
-        },
+        "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+"},
     },
     "easyrpg_battle_options": {
-        "type": "list", "name": "전투 명령",
-        "description": "전투 중 사용 가능한 명령과 그 순서입니다.",
+        "type": "list", "name": "전투 명령", "group": "전투",
+        "description": "전투에서 사용할 명령과 순서를 지정합니다.",
         "value": [0, 1, 2], "default": [0, 1, 2],
-        "options": {"0": "Battle", "1": "Auto Battle", "2": "Escape"},
+        "options": {"0": "전투", "1": "자동전투", "2": "도망"},
+    },
+    "easyrpg_max_level": {
+        "type": "int", "name": "최대 레벨", "group": "능력치",
+        "description": "캐릭터가 도달할 수 있는 최대 레벨입니다. -1은 순정 기본값을 의미합니다.",
+        "value": -1, "default": -1, "max": 255,
     },
 }
 
@@ -75,11 +133,11 @@ def read_json_safe(path, default_factory):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[{path}] JSON 손상 감지 ({e}) - 손상 파일을 백업하고 새로 생성합니다.")
+            log.warning(f"[{os.path.basename(path)}] 설정 파일이 손상되어 있어 백업 후 새로 만듭니다. ({e})")
             try:
                 os.replace(path, path + ".bak")
             except Exception as be:
-                print(f"손상 파일 백업 실패: {be}")
+                log.error(f"손상 파일 백업 실패: {be}")
             messagebox.showwarning(
                 "설정 파일 복구",
                 f"설정 파일이 손상되어 있어 새로 만들었습니다:\n{path}\n\n"
@@ -97,13 +155,13 @@ def write_json_safe(path, data):
             json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        print(f"[{path}] 저장 실패: {e}")
+        log.error(f"설정 파일 저장 실패: {path} ({e})")
         messagebox.showerror("저장 실패", f"설정 파일을 저장하지 못했습니다:\n{path}\n\n사유: {e}")
         return False
 
 
 # ------------------------------------------------------------------
-# ConfigManager: 공통 설정 + 프로젝트(게임별) 설정 + 게임 폴더 선택
+# ConfigManager: 공통 설정 + 프로젝트(게임별) 설정 + 프로젝트(ldb) 선택
 # ------------------------------------------------------------------
 class ConfigManager:
     def __init__(self, program_dir):
@@ -160,28 +218,33 @@ class ConfigManager:
             self.common_config["system_limits"] = merge_system_defs(self.common_config["system_limits"], DEFAULT_SYSTEM_DEFS)
         if changed:
             self.save_common_config()
+        log.info("공통 설정(config.json) 로드 완료")
 
     def save_common_config(self):
         return write_json_safe(self.config_file, self.common_config)
 
-    # ---- 게임 폴더 선택 / 프로젝트 결정 ----
-    def select_game_folder(self):
+    # ---- 프로젝트 선택: RPG_RT.ldb 파일을 직접 선택 ----
+    def select_project_file(self):
+        """RPG_RT.ldb 파일을 선택하게 하고, 선택된 파일의 폴더를 프로젝트로 인식합니다.
+        폴더를 먼저 고르고 검증하던 예전 방식보다 실수(잘못된 폴더 선택)가 훨씬 줄어듭니다."""
         last_dir = self.common_config.get("last_game_dir", "")
         initial = last_dir if last_dir and os.path.isdir(last_dir) else os.getcwd()
         while True:
-            folder = filedialog.askdirectory(
-                title="게임 폴더 선택 (RPG_RT.ldb가 있는 폴더)", initialdir=initial
+            file_path = filedialog.askopenfilename(
+                title="RPG_RT.ldb 파일 선택",
+                initialdir=initial,
+                filetypes=[("RPG_RT.ldb", "RPG_RT.ldb"), ("모든 파일", "*.*")],
             )
-            if not folder:
+            if not file_path:
                 return False
-            if not os.path.exists(os.path.join(folder, "RPG_RT.ldb")):
+            if os.path.basename(file_path).lower() != "rpg_rt.ldb":
                 messagebox.showerror(
-                    "잘못된 폴더",
-                    "선택한 폴더에서 RPG_RT.ldb 파일을 찾을 수 없습니다.\n게임 폴더를 다시 선택해 주세요."
+                    "잘못된 파일",
+                    "RPG_RT.ldb 파일을 선택해야 합니다.\n선택한 게임 폴더 안의 RPG_RT.ldb 파일을 다시 골라주세요."
                 )
-                initial = folder
+                initial = os.path.dirname(file_path)
                 continue
-            self.set_game_folder(folder)
+            self.set_game_folder(os.path.dirname(file_path))
             return True
 
     def set_game_folder(self, folder):
@@ -192,12 +255,14 @@ class ConfigManager:
 
         self.project_title, title_warning = get_project_title(self.game_dir)
         if title_warning:
+            log.warning(title_warning)
             messagebox.showwarning("알림", title_warning)
 
         self.project_dir = os.path.join(self.projects_dir, sanitize_folder_name(self.project_title))
         try:
             os.makedirs(self.project_dir, exist_ok=True)
         except Exception as e:
+            log.error(f"프로젝트 폴더 생성 실패: {self.project_dir} ({e})")
             messagebox.showerror("실패", f"프로젝트 폴더를 생성하지 못했습니다.\n{self.project_dir}\n\n사유: {e}")
         self.project_config_file = os.path.join(self.project_dir, "config.json")
 
@@ -206,6 +271,7 @@ class ConfigManager:
         recents.insert(0, {"title": self.project_title, "path": self.game_dir})
         self.common_config["recent_projects"] = recents[:10]
         self.save_common_config()
+        log.info(f"프로젝트 인식 완료: {self.project_title}")
 
     # ---- 프로젝트(게임별) 설정 ----
     def load_project_config(self):
@@ -225,6 +291,7 @@ class ConfigManager:
         self.current_config["system_limits"] = merged
 
         self.save_config()
+        log.info("프로젝트 설정 로드 완료")
 
     def save_config(self):
         return write_json_safe(self.project_config_file, self.current_config)

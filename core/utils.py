@@ -71,17 +71,22 @@ def migrate_system_limits(raw):
     def build_entry(key, info):
         if not isinstance(info, dict):
             info = {"value": info}
-        entry = {
-            "type": info.get("type", "int"),
-            "name": info.get("name", info.get("label", key)),
-            "description": info.get("description", ""),
-            "value": info.get("value", info.get("default", -1)),
-            "default": info.get("default", info.get("value", -1)),
-        }
+        entry = dict(info)  # group 등 알려지지 않은 추가 키도 그대로 보존
+        entry["type"] = info.get("type", "int")
+        entry["name"] = info.get("name", info.get("label", key))
+        entry["description"] = info.get("description", "")
+        entry["group"] = info.get("group", "일반")
+        entry["value"] = info.get("value", info.get("default", -1))
+        entry["default"] = info.get("default", info.get("value", -1))
+        entry.pop("label", None)
         if entry["type"] == "int":
             entry["max"] = info.get("max", 999999999)
+        else:
+            entry.pop("max", None)
         if entry["type"] in ("enum", "list"):
             entry["options"] = normalize_options(info.get("options", {}))
+        else:
+            entry.pop("options", None)
         return entry
 
     if isinstance(raw, dict):
