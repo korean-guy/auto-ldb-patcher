@@ -11,7 +11,7 @@ EasyRPG가 실제로 Skill 노드에서 사용하는 표기법입니다).
 """
 
 SKILL_FIELD_DEFS = [
-    {"name": "rating", "label": "기본 위력", "type": "int", "group": "전투",
+    {"name": "power", "label": "기본 위력", "type": "int", "group": "전투",
      "default": 0, "max": 9999,
      "description": "스킬의 기본 위력(데미지 계산에 사용)입니다."},
     {"name": "physical_rate", "label": "공격력 비율", "type": "int", "group": "전투",
@@ -71,11 +71,18 @@ def default_skill_fields():
 
 
 def migrate_skill_entry(entry):
-    """예전 버전(최상위에 rating/physical_rate/... 및 "keep" sentinel을 두던 방식)의
+    """예전 버전(최상위에 rating/physical_rate/... 및 "keep" sentinel을 두던 방식,
+    혹은 실제 EDB 태그명과 다른 "rating"이라는 잘못된 필드명으로 저장되던 방식)의
     스킬 항목을 새 스키마({"id":.., "fields": {...}})로 변환합니다.
     이미 새 형식이면 새로 추가된 필드만 기본값으로 채워서 반환합니다."""
     if isinstance(entry.get("fields"), dict):
         fields = dict(entry["fields"])
+        # 예전 버전에서 실제 EDB 태그명(<power>)이 아닌 "rating"으로 잘못 저장된 값을 이전합니다.
+        if "rating" in fields:
+            if "power" not in fields:
+                fields["power"] = fields.pop("rating")
+            else:
+                fields.pop("rating")
         for fd in SKILL_FIELD_DEFS:
             if fd["name"] not in fields:
                 fields[fd["name"]] = fd["default"]
@@ -85,5 +92,7 @@ def migrate_skill_entry(entry):
     for fd in SKILL_FIELD_DEFS:
         name = fd["name"]
         old_val = entry.get(name, "keep")
+        if name == "power" and old_val == "keep" and "rating" in entry:
+            old_val = entry.get("rating", "keep")
         fields[name] = fd["default"] if old_val == "keep" else old_val
     return {"id": entry["id"], "fields": fields}

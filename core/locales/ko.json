@@ -68,6 +68,7 @@
   "lcf.title_success": "대성공",
   "lcf.msg_patch_success": "전역 한계 해제 및 스킬/아이템 개조 패치가 완료되었습니다!\nRPG_RT.edb는 정리되었습니다. 다시 수정하려면 'edb로드'를 눌러주세요.",
   "lcf.log_patch_done": "패치 완료: RPG_RT.ldb 갱신됨",
+  "lcf.log_tag_not_found": "'{tag}' 태그를 {node}에서 찾지 못해 새로 추가합니다 (필드명이 실제 EDB 태그명과 다를 수 있습니다 - 확인이 필요합니다).",
 
   "field.int_hint": "값 (-1 = 순정 기본):",
   "field.bool_checked_label": "사용함",

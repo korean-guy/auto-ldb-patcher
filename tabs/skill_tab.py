@@ -27,7 +27,7 @@ from core.logger import log
 from core.i18n import t
 
 # 기본 위력/공격력 비율/정신력 비율은 edb에 이미 존재하는 실제 수치를 기본값으로 사용합니다.
-STAT_FIELDS_FROM_EDB = ("rating", "physical_rate", "magical_rate")
+STAT_FIELDS_FROM_EDB = ("power", "physical_rate", "magical_rate")
 
 # 그룹 목록(등장 순서) - 상단 바로가기 버튼에 사용
 SKILL_GROUPS_ORDERED = list(dict.fromkeys(fd.get("group", "기타") for fd in SKILL_FIELD_DEFS))
@@ -150,7 +150,7 @@ class SkillTab:
             sid = sk["id"]
             name = self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
             fields = sk.get("fields", {})
-            rating = fields.get("rating", 0)
+            rating = fields.get("power", 0)
             phys = fields.get("physical_rate", 0)
             mag = fields.get("magical_rate", 0)
             crit = fields.get("easyrpg_critical_hit_chance", 0)

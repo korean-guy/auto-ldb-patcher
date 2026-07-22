@@ -73,7 +73,7 @@ def decompile_and_parse_edb_directly(cfg):
             edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else t("common.name_unknown")
 
             stats = {}
-            for tag in ("rating", "physical_rate", "magical_rate"):
+            for tag in ("power", "physical_rate", "magical_rate"):
                 m = re.search(rf'<{tag}>(.*?)</{tag}>', block, re.DOTALL | re.IGNORECASE)
                 if m and m.group(1).strip().lstrip("-").isdigit():
                     stats[tag] = int(m.group(1).strip())
@@ -118,8 +118,11 @@ def apply_final_patch(cfg):
                 else:
                     text_val = str(val)
                 tag = actual_system_node.find(key)
-                if tag is not None: tag.text = text_val
-                else: ET.SubElement(actual_system_node, key).text = text_val
+                if tag is not None:
+                    tag.text = text_val
+                else:
+                    log.warning(t("lcf.log_tag_not_found", tag=key, node="System"))
+                    ET.SubElement(actual_system_node, key).text = text_val
             log.info(t("lcf.log_system_applied"))
 
     try:
@@ -138,8 +141,11 @@ def apply_final_patch(cfg):
                                 val = fields[name]
                                 text_val = "T" if (fd.get("type") == "bool" and val) else ("F" if fd.get("type") == "bool" else str(val))
                                 tag = item_node.find(name)
-                                if tag is not None: tag.text = text_val
-                                else: ET.SubElement(item_node, name).text = text_val
+                                if tag is not None:
+                                    tag.text = text_val
+                                else:
+                                    log.warning(t("lcf.log_tag_not_found", tag=name, node=f"Item {it['id']}"))
+                                    ET.SubElement(item_node, name).text = text_val
             if t_low == "skills" or t_low == "skills_container" or t_low == "skill_container":
                 for sk in cfg.current_config.get("skills", []):
                     for skill_node in el.findall("Skill") + el.findall("skill"):
@@ -156,8 +162,11 @@ def apply_final_patch(cfg):
                                 else:
                                     text_val = str(val)
                                 tag = skill_node.find(name)
-                                if tag is not None: tag.text = text_val
-                                else: ET.SubElement(skill_node, name).text = text_val
+                                if tag is not None:
+                                    tag.text = text_val
+                                else:
+                                    log.warning(t("lcf.log_tag_not_found", tag=name, node=f"Skill {sk['id']}"))
+                                    ET.SubElement(skill_node, name).text = text_val
     except Exception as e:
         log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
         messagebox.showerror(t("common.title_fail"), t("lcf.msg_apply_error", reason=e))
