@@ -56,7 +56,7 @@ def apply_dark_theme(root):
 def attach_tree_scrollbar(tree, parent):
     vsb = ttk.Scrollbar(parent, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
-    vsb.pack(side="left", fill="y")
+    vsb.pack(side="right", fill="y")
 
 
 def make_listbox_with_scroll(parent, height=6):
@@ -67,8 +67,8 @@ def make_listbox_with_scroll(parent, height=6):
                           highlightthickness=0, relief="flat", activestyle="none",
                           yscrollcommand=scrollbar.set)
     scrollbar.config(command=listbox.yview)
-    listbox.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
+    listbox.pack(side="left", fill="both", expand=True)
     return frame, listbox
 
 

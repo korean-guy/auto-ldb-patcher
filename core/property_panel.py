@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from core.theme import BG, BG2, FG, FG_DIM, BORDER, make_checkbutton
+from core.i18n import t
 
 # System/Skill/Item 탭이 공통으로 사용하는 속성 편집기 고정 크기
 DETAIL_WIDTH = 320
@@ -78,8 +79,11 @@ def make_fixed_scroll_panel(parent, width=DETAIL_WIDTH, height=DETAIL_HEIGHT):
     canvas.bind("<Key-Up>", _on_key_scroll)
     canvas.bind("<Key-Down>", _on_key_scroll)
 
-    canvas.pack(side="left", fill="both", expand=True)
+    # 스크롤바를 먼저 배치해 자기 몫의 폭을 확보한 뒤, 캔버스가 나머지 공간을
+    # fill+expand로 채우도록 합니다. 순서가 바뀌면(캔버스를 먼저 expand로 채우면)
+    # 스크롤바가 배치될 공간이 남지 않아 폭이 0에 가깝게 눌려 사실상 안 보이게 됩니다.
     vsb.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
 
     outer.scroll_canvas = canvas  # 렌더링 후 스크롤 위치 제어(맨 위로 리셋, 특정 그룹으로 이동 등)에 사용
     return outer, inner
@@ -118,7 +122,7 @@ def render_group_header(parent, text):
 def render_field_row(parent, field_def, value, on_change):
     """필드 하나(label/description/컨트롤)를 그립니다.
     반환값: (컨트롤_위젯, set_enabled(bool) 함수) - 조건부 활성/비활성에 사용."""
-    t = field_def.get("type", "int")
+    field_type = field_def.get("type", "int")
     name = field_def.get("name")
 
     ttk.Label(parent, text=field_def.get("label", name),
@@ -130,7 +134,7 @@ def render_field_row(parent, field_def, value, on_change):
     control = None
     set_enabled = lambda enabled: None
 
-    if t == "int":
+    if field_type == "int":
         entry = ttk.Entry(parent, width=24)
         entry.insert(0, str(value))
 
@@ -156,7 +160,7 @@ def render_field_row(parent, field_def, value, on_change):
         def set_enabled(enabled):
             entry.configure(state="normal" if enabled else "disabled")
 
-    elif t == "string":
+    elif field_type == "string":
         entry = ttk.Entry(parent, width=24)
         entry.insert(0, str(value))
 
@@ -172,20 +176,20 @@ def render_field_row(parent, field_def, value, on_change):
         def set_enabled(enabled):
             entry.configure(state="normal" if enabled else "disabled")
 
-    elif t == "bool":
+    elif field_type == "bool":
         var = tk.BooleanVar(value=bool(value))
 
         def _toggle():
             on_change(bool(var.get()))
 
-        cb = make_checkbutton(parent, "사용함", var, command=_toggle)
+        cb = make_checkbutton(parent, t("field.bool_checked_label"), var, command=_toggle)
         cb.pack(anchor="w", pady=(2, 4))
         control = cb
 
         def set_enabled(enabled):
             cb.configure(state="normal" if enabled else "disabled")
 
-    elif t == "enum":
+    elif field_type == "enum":
         options = field_def.get("options", {})
         items = sorted(options.items(), key=lambda kv: str(kv[0]))
         labels = [f"{k} : {v}" for k, v in items]

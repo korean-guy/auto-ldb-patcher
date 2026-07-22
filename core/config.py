@@ -11,6 +11,7 @@ from tkinter import messagebox, filedialog
 
 from core.utils import get_project_title, sanitize_folder_name, migrate_system_limits, merge_system_defs
 from core.logger import log
+from core.i18n import t
 
 
 # ---- 시스템 옵션 기본 정의 (최초 설치 시 config.json 시드 데이터로 사용) ----
@@ -133,15 +134,14 @@ def read_json_safe(path, default_factory):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            log.warning(f"[{os.path.basename(path)}] 설정 파일이 손상되어 있어 백업 후 새로 만듭니다. ({e})")
+            log.warning(t("config.log_config_corrupted", path=os.path.basename(path), reason=e))
             try:
                 os.replace(path, path + ".bak")
             except Exception as be:
-                log.error(f"손상 파일 백업 실패: {be}")
+                log.error(t("config.log_backup_fail", reason=be))
             messagebox.showwarning(
-                "설정 파일 복구",
-                f"설정 파일이 손상되어 있어 새로 만들었습니다:\n{path}\n\n"
-                f"기존 파일은 '{os.path.basename(path)}.bak'로 백업되었습니다."
+                t("config.title_config_recovered"),
+                t("config.msg_config_corrupted", path=path, backup_name=f"{os.path.basename(path)}.bak")
             )
     data = default_factory()
     write_json_safe(path, data)
@@ -155,8 +155,8 @@ def write_json_safe(path, data):
             json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        log.error(f"설정 파일 저장 실패: {path} ({e})")
-        messagebox.showerror("저장 실패", f"설정 파일을 저장하지 못했습니다:\n{path}\n\n사유: {e}")
+        log.error(t("config.log_save_fail", path=path, reason=e))
+        messagebox.showerror(t("common.title_save_fail"), t("config.msg_save_fail", path=path, reason=e))
         return False
 
 
@@ -184,12 +184,11 @@ class ConfigManager:
     def check_program_prerequisites(self):
         missing = []
         if not os.path.exists(self.lcf2xml_bin):
-            missing.append(f"- lcf2xml.exe  (위치: {self.program_dir})")
+            missing.append(t("config.msg_missing_lcf2xml", dir=self.program_dir))
         if missing:
             messagebox.showerror(
-                "실행 실패",
-                "다음 필수 파일을 찾을 수 없습니다:\n\n" + "\n".join(missing) +
-                "\n\n프로그램 파일(py/exe)과 같은 폴더에 배치해 주세요."
+                t("common.title_fail"),
+                t("config.msg_missing_files", list="\n".join(missing))
             )
             return False
         return True
@@ -218,7 +217,7 @@ class ConfigManager:
             self.common_config["system_limits"] = merge_system_defs(self.common_config["system_limits"], DEFAULT_SYSTEM_DEFS)
         if changed:
             self.save_common_config()
-        log.info("공통 설정(config.json) 로드 완료")
+        log.info(t("config.log_common_loaded"))
 
     def save_common_config(self):
         return write_json_safe(self.config_file, self.common_config)
@@ -231,16 +230,16 @@ class ConfigManager:
         initial = last_dir if last_dir and os.path.isdir(last_dir) else os.getcwd()
         while True:
             file_path = filedialog.askopenfilename(
-                title="RPG_RT.ldb 파일 선택",
+                title=t("config.dialog_select_ldb_title"),
                 initialdir=initial,
-                filetypes=[("RPG_RT.ldb", "RPG_RT.ldb"), ("모든 파일", "*.*")],
+                filetypes=[(t("config.filetype_ldb"), "RPG_RT.ldb"), (t("config.filetype_all"), "*.*")],
             )
             if not file_path:
                 return False
             if os.path.basename(file_path).lower() != "rpg_rt.ldb":
                 messagebox.showerror(
-                    "잘못된 파일",
-                    "RPG_RT.ldb 파일을 선택해야 합니다.\n선택한 게임 폴더 안의 RPG_RT.ldb 파일을 다시 골라주세요."
+                    t("common.title_invalid"),
+                    t("config.msg_invalid_ldb")
                 )
                 initial = os.path.dirname(file_path)
                 continue
@@ -256,14 +255,14 @@ class ConfigManager:
         self.project_title, title_warning = get_project_title(self.game_dir)
         if title_warning:
             log.warning(title_warning)
-            messagebox.showwarning("알림", title_warning)
+            messagebox.showwarning(t("common.title_notice"), title_warning)
 
         self.project_dir = os.path.join(self.projects_dir, sanitize_folder_name(self.project_title))
         try:
             os.makedirs(self.project_dir, exist_ok=True)
         except Exception as e:
-            log.error(f"프로젝트 폴더 생성 실패: {self.project_dir} ({e})")
-            messagebox.showerror("실패", f"프로젝트 폴더를 생성하지 못했습니다.\n{self.project_dir}\n\n사유: {e}")
+            log.error(t("config.msg_project_dir_fail", dir=self.project_dir, reason=e))
+            messagebox.showerror(t("common.title_fail"), t("config.msg_project_dir_fail", dir=self.project_dir, reason=e))
         self.project_config_file = os.path.join(self.project_dir, "config.json")
 
         self.common_config["last_game_dir"] = self.game_dir
@@ -271,7 +270,7 @@ class ConfigManager:
         recents.insert(0, {"title": self.project_title, "path": self.game_dir})
         self.common_config["recent_projects"] = recents[:10]
         self.save_common_config()
-        log.info(f"프로젝트 인식 완료: {self.project_title}")
+        log.info(t("config.log_project_recognized", title=self.project_title))
 
     # ---- 프로젝트(게임별) 설정 ----
     def load_project_config(self):
@@ -291,7 +290,7 @@ class ConfigManager:
         self.current_config["system_limits"] = merged
 
         self.save_config()
-        log.info("프로젝트 설정 로드 완료")
+        log.info(t("config.log_project_config_loaded"))
 
     def save_config(self):
         return write_json_safe(self.project_config_file, self.current_config)

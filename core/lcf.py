@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from tkinter import messagebox
 
 from core.logger import log
+from core.i18n import t
 from core.skill_schema import SKILL_FIELD_DEFS
 from core.item_schema import ITEM_FIELD_DEFS
 
@@ -22,14 +23,14 @@ def run_lcf2xml(cfg, target_file):
         subprocess.run([cfg.lcf2xml_bin, target_file], check=True, shell=True, cwd=cfg.game_dir)
         return True
     except FileNotFoundError:
-        messagebox.showerror("실패", "lcf2xml.exe 실행 파일을 찾을 수 없습니다.\n프로그램 폴더를 확인해 주세요.")
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_exe_not_found"))
         return False
     except subprocess.CalledProcessError as e:
-        messagebox.showerror("실패", f"lcf2xml 변환 중 오류가 발생했습니다. (종료 코드: {e.returncode})")
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_convert_error", code=e.returncode))
         return False
     except Exception as e:
-        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
-        messagebox.showerror("실패", f"lcf2xml 실행 중 알 수 없는 오류가 발생했습니다.\n{e}")
+        log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_unknown_error", reason=e))
         return False
 
 
@@ -40,17 +41,17 @@ def decompile_and_parse_edb_directly(cfg):
     if not os.path.exists(cfg.ldb_file):
         return None, None, None, None
 
-    log.info("RPG_RT.ldb → RPG_RT.edb 변환 중...")
+    log.info(t("lcf.log_converting"))
     if not run_lcf2xml(cfg, cfg.ldb_file):
         return None, None, None, None
     if not os.path.exists(cfg.edb_file):
         messagebox.showerror(
-            "실패",
-            "RPG_RT.edb 파일이 생성되지 않았습니다.\nlcf2xml 변환이 정상적으로 끝나지 않은 것 같습니다."
+            t("common.title_fail"),
+            t("lcf.msg_edb_not_created")
         )
         return None, None, None, None
 
-    log.info("edb(XML)에서 아이템/스킬 정보 파싱 중...")
+    log.info(t("lcf.log_parsing"))
     edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats = {}, {}, {}, {}
     try:
         with open(cfg.edb_file, "r", encoding="utf-8") as f:
@@ -61,7 +62,7 @@ def decompile_and_parse_edb_directly(cfg):
             iid, block = int(match.group(1)), match.group(2)
             name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
             type_m = re.search(r'<type>(.*?)</type>', block, re.DOTALL | re.IGNORECASE)
-            edb_master_items[iid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
+            edb_master_items[iid] = name_m.group(1) if name_m and name_m.group(1) else t("common.name_unknown")
             if type_m and type_m.group(1).strip().lstrip("-").isdigit():
                 edb_master_item_types[iid] = int(type_m.group(1).strip())
 
@@ -69,7 +70,7 @@ def decompile_and_parse_edb_directly(cfg):
         for match in skill_block_pattern.finditer(xml_text):
             sid, block = int(match.group(1)), match.group(2)
             name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
-            edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else "이름 없음"
+            edb_master_skills[sid] = name_m.group(1) if name_m and name_m.group(1) else t("common.name_unknown")
 
             stats = {}
             for tag in ("rating", "physical_rate", "magical_rate"):
@@ -78,11 +79,11 @@ def decompile_and_parse_edb_directly(cfg):
                     stats[tag] = int(m.group(1).strip())
             edb_master_skill_stats[sid] = stats
 
-        log.info(f"동기화 완료: 아이템 {len(edb_master_items)}개, 스킬 {len(edb_master_skills)}개 인식")
+        log.info(t("lcf.log_sync_done", item_count=len(edb_master_items), skill_count=len(edb_master_skills)))
         return edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats
     except Exception as e:
-        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
-        messagebox.showerror("실패", f"RPG_RT.edb 파일을 분석하는 중 오류가 발생했습니다.\n{e}")
+        log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_parse_error", reason=e))
         return None, None, None, None
 
 
@@ -90,15 +91,15 @@ def apply_final_patch(cfg):
     """현재 프로젝트 설정(system_limits/items/skills)을 edb에 반영하고
     다시 ldb로 컴파일한 뒤, edb를 정리합니다. 성공하면 True를 반환합니다."""
     if not os.path.exists(cfg.edb_file):
-        messagebox.showerror("실패", "RPG_RT.edb 파일이 없습니다. 먼저 'edb로드' 버튼을 눌러주세요.")
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_no_edb"))
         return False
 
     try:
         tree = ET.parse(cfg.edb_file)
         root = tree.getroot()
     except Exception as e:
-        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
-        messagebox.showerror("실패", f"RPG_RT.edb 파일을 읽는 중 오류가 발생했습니다.\n파일이 손상되었을 수 있습니다.\n{e}")
+        log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_edb_read_error", reason=e))
         return False
 
     _container = root.find(".//system")
@@ -108,18 +109,18 @@ def apply_final_patch(cfg):
         actual_system_node = _node if _node is not None else system_container.find("system")
         if actual_system_node is not None:
             for key, defn in cfg.current_config.get("system_limits", {}).items():
-                t = defn.get("type", "int")
+                field_type = defn.get("type", "int")
                 val = defn.get("value")
-                if t == "bool":
+                if field_type == "bool":
                     text_val = "1" if val else "0"
-                elif t == "list":
+                elif field_type == "list":
                     text_val = ",".join(str(v) for v in (val or []))
                 else:
                     text_val = str(val)
                 tag = actual_system_node.find(key)
                 if tag is not None: tag.text = text_val
                 else: ET.SubElement(actual_system_node, key).text = text_val
-            log.info("시스템 옵션 값 적용 완료")
+            log.info(t("lcf.log_system_applied"))
 
     try:
         for el in root.iter():
@@ -158,31 +159,31 @@ def apply_final_patch(cfg):
                                 if tag is not None: tag.text = text_val
                                 else: ET.SubElement(skill_node, name).text = text_val
     except Exception as e:
-        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
-        messagebox.showerror("실패", f"아이템/스킬 값을 적용하는 중 오류가 발생했습니다.\n{e}")
+        log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_apply_error", reason=e))
         return False
 
     try:
         tree.write(cfg.edb_file, encoding="utf-8", xml_declaration=True)
     except Exception as e:
-        log.error("상세 오류는 콘솔을 확인해 주세요."); traceback.print_exc()
-        messagebox.showerror("실패", f"RPG_RT.edb 파일 저장 중 오류가 발생했습니다.\n{e}")
+        log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_edb_write_error", reason=e))
         return False
 
     if not run_lcf2xml(cfg, cfg.edb_file):
         return False
 
     if not os.path.exists(cfg.ldb_file):
-        messagebox.showerror("실패", "RPG_RT.ldb 파일이 생성되지 않았습니다. lcf2xml 변환을 다시 확인해 주세요.")
+        messagebox.showerror(t("common.title_fail"), t("lcf.msg_ldb_not_created"))
         return False
 
     if os.path.exists(cfg.edb_file):
         try:
             os.remove(cfg.edb_file)
         except Exception as e:
-            log.warning(f"RPG_RT.edb 삭제 실패: {e}")
-            messagebox.showwarning("알림", f"패치는 완료되었지만 RPG_RT.edb 삭제에는 실패했습니다.\n(사유: {e})\n다음 'edb로드' 시 자동으로 새로 갱신됩니다.")
+            log.warning(t("lcf.log_edb_delete_fail", reason=e))
+            messagebox.showwarning(t("common.title_notice"), t("lcf.msg_edb_delete_fail", reason=e))
 
-    messagebox.showinfo("대성공", "전역 한계 해제 및 스킬/아이템 개조 패치가 완료되었습니다!\nRPG_RT.edb는 정리되었습니다. 다시 수정하려면 'edb로드'를 눌러주세요.")
-    log.info("패치 완료: RPG_RT.ldb 갱신됨")
+    messagebox.showinfo(t("lcf.title_success"), t("lcf.msg_patch_success"))
+    log.info(t("lcf.log_patch_done"))
     return True

@@ -11,6 +11,9 @@ auto ldb patcher.py
 
 새 탭을 추가하려면 tabs/ 아래에 파일 하나만 만들고,
 아래 TAB_CLASSES 목록에 한 줄만 추가하면 됩니다.
+
+화면에 보이는 문자열은 직접 쓰지 않고 core.i18n.t()로 core/locales/ko.json에서
+가져옵니다 - 나중에 영어/일본어를 추가할 때 이 파일들은 건드릴 필요가 없습니다.
 """
 import os
 import sys
@@ -24,6 +27,7 @@ from core.utils import get_program_dir
 from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme
 from core.config import ConfigManager
 from core.logger import log
+from core.i18n import t
 from core import lcf
 
 from tabs.item_tab import ItemTab
@@ -39,7 +43,7 @@ LOG_PANEL_HEIGHT = 7
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("EasyRPG DB Editor (Dynamic External Plugin Version)")
+        self.root.title(t("main.window_title"))
         self.root.geometry("1200x1300")
         self._init_ok = False
 
@@ -97,7 +101,7 @@ class App:
         self.refresh_all_tabs()
         self.refresh_edb_overlay()
         if os.path.exists(self.cfg.edb_file):
-            messagebox.showinfo("완료", "순정 edb에서 개체 이름들을 실시간 동기화했습니다!")
+            messagebox.showinfo(t("common.title_done"), t("main.msg_edb_synced"))
 
     def change_project_file(self):
         if self.cfg.select_project_file():
@@ -107,7 +111,7 @@ class App:
             self.refresh_all_tabs()
             self.refresh_edb_overlay()
             if hasattr(self, "project_label"):
-                self.project_label.config(text=f"프로젝트: {self.cfg.project_title}   ({self.cfg.game_dir})")
+                self.project_label.config(text=t("main.project_label", title=self.cfg.project_title, dir=self.cfg.game_dir))
 
     def apply_final_patch(self):
         if lcf.apply_final_patch(self.cfg):
@@ -119,13 +123,13 @@ class App:
     def create_widgets(self):
         top_frame = ttk.Frame(self.root, padding=10)
         top_frame.pack(fill="x")
-        ttk.Button(top_frame, text="📥 edb로드", command=self.refresh_from_edb).pack(side="left", padx=5)
-        ttk.Button(top_frame, text="🗂 프로젝트(ldb) 변경", command=self.change_project_file).pack(side="left", padx=5)
+        ttk.Button(top_frame, text=t("common.btn_reload_edb"), command=self.refresh_from_edb).pack(side="left", padx=5)
+        ttk.Button(top_frame, text=t("main.btn_change_project"), command=self.change_project_file).pack(side="left", padx=5)
         self.project_label = ttk.Label(
-            top_frame, text=f"프로젝트: {self.cfg.project_title}   ({self.cfg.game_dir})", foreground=FG_DIM
+            top_frame, text=t("main.project_label", title=self.cfg.project_title, dir=self.cfg.game_dir), foreground=FG_DIM
         )
         self.project_label.pack(side="left", padx=15)
-        ttk.Button(top_frame, text="💾 저장(ldb전환)", command=self.apply_final_patch).pack(side="right", padx=5)
+        ttk.Button(top_frame, text=t("common.btn_save_patch"), command=self.apply_final_patch).pack(side="right", padx=5)
 
         self.body_container = ttk.Frame(self.root)
         self.body_container.pack(fill="both", expand=True, padx=10, pady=(10, 5))
@@ -144,11 +148,11 @@ class App:
         overlay_inner = tk.Frame(self.overlay, bg=BG)
         overlay_inner.place(relx=0.5, rely=0.5, anchor="center")
         tk.Label(overlay_inner, text="⚠", font=("Segoe UI", 40), bg=BG, fg="#e0b400").pack(pady=(0, 10))
-        tk.Label(overlay_inner, text="RPG_RT.edb 파일을 찾을 수 없습니다.",
+        tk.Label(overlay_inner, text=t("main.overlay_title"),
                  font=("Segoe UI", 13, "bold"), bg=BG, fg=FG).pack()
-        tk.Label(overlay_inner, text="edb로드 버튼을 눌러주세요.",
+        tk.Label(overlay_inner, text=t("main.overlay_subtitle"),
                  font=("Segoe UI", 11), bg=BG, fg=FG_DIM).pack(pady=(2, 16))
-        ttk.Button(overlay_inner, text="📥 edb로드", command=self.refresh_from_edb).pack()
+        ttk.Button(overlay_inner, text=t("common.btn_reload_edb"), command=self.refresh_from_edb).pack()
 
         self.create_log_panel()
 
@@ -158,8 +162,8 @@ class App:
 
         header = ttk.Frame(log_frame)
         header.pack(fill="x")
-        ttk.Label(header, text="로그", foreground=FG_DIM).pack(side="left")
-        ttk.Button(header, text="지우기", command=self.clear_log).pack(side="right")
+        ttk.Label(header, text=t("main.log_label"), foreground=FG_DIM).pack(side="left")
+        ttk.Button(header, text=t("common.btn_clear"), command=self.clear_log).pack(side="right")
 
         text_row = tk.Frame(log_frame, bg=BG2, highlightthickness=1, highlightbackground=BORDER)
         text_row.pack(fill="x", pady=(4, 0))
@@ -169,15 +173,16 @@ class App:
                                  wrap="word")
         vsb = ttk.Scrollbar(text_row, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=vsb.set)
-        self.log_text.pack(side="left", fill="both", expand=True)
+        # (스크롤바를 먼저 배치해야 자기 몫의 폭을 확보합니다 - core/property_panel.py 참고)
         vsb.pack(side="right", fill="y")
+        self.log_text.pack(side="left", fill="both", expand=True)
 
         self.log_text.tag_configure("info", foreground=FG)
         self.log_text.tag_configure("warning", foreground="#e0b400")
         self.log_text.tag_configure("error", foreground="#ff6b6b")
 
         log.attach(self.log_text)
-        log.info("EasyRPG DB Editor 시작")
+        log.info(t("main.log_started"))
 
     def clear_log(self):
         self.log_text.configure(state="normal")

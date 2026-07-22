@@ -15,12 +15,14 @@ from tkinter import ttk, messagebox
 from core.theme import FG_DIM, attach_tree_scrollbar, make_listbox_with_scroll, make_checkbutton, enable_column_sort, enable_column_width_persistence
 from core.property_panel import make_fixed_scroll_panel, render_field_row, render_group_header, scroll_panel_to_top, DETAIL_WIDTH, DETAIL_HEIGHT
 from core.logger import log
+from core.i18n import t, t_field
 
-TYPE_LABEL_MAP = {"int": "정수", "bool": "체크박스", "enum": "콤보박스", "list": "체크+순서"}
+TYPE_LABEL_MAP = {"int": t("type_label.int"), "bool": t("type_label.bool"),
+                   "enum": t("type_label.enum"), "list": t("type_label.list")}
 
 
 class SystemTab:
-    TITLE = "⚙️ 시스템 상한 제한 조절"
+    TITLE = t("system_tab.title")
 
     def __init__(self, app):
         self.app = app
@@ -40,8 +42,8 @@ class SystemTab:
 
         filter_row = ttk.Frame(left_frame)
         filter_row.pack(fill="x", pady=(0, 6))
-        ttk.Label(filter_row, text="그룹:").pack(side="left", padx=(0, 6))
-        self.group_filter_var = tk.StringVar(value="전체")
+        ttk.Label(filter_row, text=t("system_tab.label_group_filter")).pack(side="left", padx=(0, 6))
+        self.group_filter_var = tk.StringVar(value=t("system_tab.group_all"))
         self.group_filter_combo = ttk.Combobox(filter_row, textvariable=self.group_filter_var,
                                                 state="readonly", width=16)
         self.group_filter_combo.pack(side="left")
@@ -51,11 +53,12 @@ class SystemTab:
         tree_row.pack(fill="both", expand=True)
         columns = ("이름", "그룹", "타입", "현재값", "최대값")
         self.sys_tree = ttk.Treeview(tree_row, columns=columns, show="headings", height=18)
-        for col, txt in [("이름", "옵션명"), ("그룹", "그룹"), ("타입", "타입"),
-                          ("현재값", "현재값"), ("최대값", "최대값")]:
+        for col, txt in [("이름", t("system_tab.col_name")), ("그룹", t("system_tab.col_group")),
+                          ("타입", t("system_tab.col_type")), ("현재값", t("system_tab.col_value")),
+                          ("최대값", t("system_tab.col_max"))]:
             self.sys_tree.heading(col, text=txt)
-        self.sys_tree.pack(fill="both", expand=True, side="left")
         attach_tree_scrollbar(self.sys_tree, tree_row)
+        self.sys_tree.pack(fill="both", expand=True, side="left")
 
         self.sys_tree.column("이름", width=170, anchor="w")
         self.sys_tree.column("그룹", width=80, anchor="center")
@@ -75,24 +78,24 @@ class SystemTab:
         self.detail_outer.pack(anchor="n")
         self._show_placeholder()
 
-        ttk.Button(sys_side_frame, text="🔄 모든 항목 기본값으로 초기화",
+        ttk.Button(sys_side_frame, text=t("system_tab.btn_reset_all"),
                    command=self.reset_sys_limits).pack(fill="x", pady=(12, 3))
 
     def _show_placeholder(self):
         for w in self.sys_detail_frame.winfo_children():
             w.destroy()
-        ttk.Label(self.sys_detail_frame, text="왼쪽 목록에서 항목을 선택하세요.", foreground=FG_DIM,
+        ttk.Label(self.sys_detail_frame, text=t("system_tab.placeholder"), foreground=FG_DIM,
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=8)
 
     # ------------------------------------------------------------------
     def _all_groups(self):
         groups = sorted({defn.get("group", "일반") for defn in self.cfg.current_config.get("system_limits", {}).values()})
-        return ["전체"] + groups
+        return [t("system_tab.group_all")] + groups
 
     def refresh(self):
         self.group_filter_combo.configure(values=self._all_groups())
         if self.group_filter_var.get() not in self._all_groups():
-            self.group_filter_var.set("전체")
+            self.group_filter_var.set(t("system_tab.group_all"))
 
         selected = self.sys_tree.selection()
         prev_iid = selected[0] if selected else None
@@ -103,10 +106,10 @@ class SystemTab:
             if key == "easyrpg_max_item_count":
                 continue
             group = defn.get("group", "일반")
-            if active_group != "전체" and group != active_group:
+            if active_group != t("system_tab.group_all") and group != active_group:
                 continue
             self.sys_tree.insert("", "end", iid=key, values=(
-                defn.get("name", key), group,
+                t_field("sys", key, "name", defn.get("name", key)), group,
                 TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
                 self.format_sys_max(defn),
@@ -117,24 +120,24 @@ class SystemTab:
             self.sys_tree.see(prev_iid)
 
     def format_sys_value(self, defn):
-        t = defn.get("type", "int")
+        field_type = defn.get("type", "int")
         val = defn.get("value")
-        if t == "bool":
-            return "사용" if val else "미사용"
-        if t == "enum":
+        if field_type == "bool":
+            return t("system_tab.value_bool_on") if val else t("system_tab.value_bool_off")
+        if field_type == "enum":
             label = defn.get("options", {}).get(str(val))
             return f'{val} ({label})' if label else str(val)
-        if t == "list":
+        if field_type == "list":
             options = defn.get("options", {})
-            return " → ".join(options.get(str(v), str(v)) for v in (val or [])) or "(없음)"
-        return "순정 한계 (-1)" if val == -1 else f"{val:,}"
+            return " → ".join(options.get(str(v), str(v)) for v in (val or [])) or t("system_tab.value_list_empty")
+        return t("system_tab.value_default_limit") if val == -1 else f"{val:,}"
 
     def format_sys_max(self, defn):
         if defn.get("type") != "int":
-            return "-"
+            return t("system_tab.value_max_none")
         max_val = defn.get("max")
         if max_val is None:
-            return "-"
+            return t("system_tab.value_max_none")
         try:
             return f"{max_val:,}"
         except (TypeError, ValueError):
@@ -159,28 +162,30 @@ class SystemTab:
             w.destroy()
         self._current_sys_key = key
         self._current_sys_def = defn
-        t = defn.get("type", "int")
+        field_type = defn.get("type", "int")
         p = self.sys_detail_frame
 
-        ttk.Label(p, text=defn.get("name", key), font=("Segoe UI", 11, "bold"),
+        display_name = t_field("sys", key, "name", defn.get("name", key))
+        display_desc = t_field("sys", key, "description", defn.get("description", ""))
+        ttk.Label(p, text=display_name, font=("Segoe UI", 11, "bold"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=(8, 2))
         ttk.Label(p, text=key, foreground=FG_DIM).pack(anchor="w", padx=8, pady=(0, 6))
-        if defn.get("description"):
-            ttk.Label(p, text=defn["description"], foreground=FG_DIM,
+        if display_desc:
+            ttk.Label(p, text=display_desc, foreground=FG_DIM,
                       wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=(0, 8))
 
         body = ttk.Frame(p)
         body.pack(fill="x", padx=8)
 
-        if t in ("int", "bool", "enum"):
+        if field_type in ("int", "bool", "enum"):
             def _on_change(new_val):
                 self._current_sys_def["value"] = new_val
                 self.cfg.save_config()
                 self.refresh()
-                log.info(f"[{self._current_sys_def.get('name')}] 값 저장: {new_val}")
+                log.info(t("system_tab.log_field_saved", name=self._current_sys_def.get("name"), value=new_val))
             render_field_row(body, defn, defn.get("value"), _on_change)
 
-        elif t == "list":
+        elif field_type == "list":
             self._render_list_field(body, defn)
 
         scroll_panel_to_top(self.detail_outer)
@@ -198,14 +203,14 @@ class SystemTab:
             self.sys_list_vars[v] = var
             make_checkbutton(parent, label, var, command=self.refresh_sys_list_order).pack(anchor="w")
 
-        ttk.Label(parent, text="적용 순서:").pack(anchor="w", pady=(10, 2))
+        ttk.Label(parent, text=t("system_tab.label_apply_order")).pack(anchor="w", pady=(10, 2))
         list_frame, self.sys_list_order_box = make_listbox_with_scroll(parent, height=5)
         list_frame.pack(anchor="w", fill="x", pady=(0, 6))
 
         btn_row = ttk.Frame(parent); btn_row.pack(fill="x")
-        ttk.Button(btn_row, text="▲ 위로", command=lambda: self.move_sys_list_item(-1)).pack(side="left", expand=True, fill="x")
-        ttk.Button(btn_row, text="▼ 아래로", command=lambda: self.move_sys_list_item(1)).pack(side="left", expand=True, fill="x")
-        ttk.Button(parent, text="✏️ 적용", command=self.apply_sys_list).pack(fill="x", pady=(8, 4))
+        ttk.Button(btn_row, text=t("system_tab.btn_move_up"), command=lambda: self.move_sys_list_item(-1)).pack(side="left", expand=True, fill="x")
+        ttk.Button(btn_row, text=t("system_tab.btn_move_down"), command=lambda: self.move_sys_list_item(1)).pack(side="left", expand=True, fill="x")
+        ttk.Button(parent, text=t("system_tab.btn_apply"), command=self.apply_sys_list).pack(fill="x", pady=(8, 4))
 
         self.refresh_sys_list_order()
 
@@ -238,10 +243,10 @@ class SystemTab:
         self._current_sys_def["value"] = list(self.sys_list_order)
         self.cfg.save_config()
         self.refresh()
-        log.info(f"[{self._current_sys_def.get('name')}] 값 저장: {self.sys_list_order}")
+        log.info(t("system_tab.log_field_saved", name=self._current_sys_def.get("name"), value=self.sys_list_order))
 
     def reset_sys_limits(self):
-        if not messagebox.askyesno("전체 초기화", "모든 시스템 항목을 기본값으로 되돌리시겠습니까?"): return
+        if not messagebox.askyesno(t("system_tab.title_confirm_reset"), t("system_tab.msg_confirm_reset")): return
         for key, defn in self.cfg.current_config.get("system_limits", {}).items():
             if key == "easyrpg_max_item_count":
                 continue
@@ -250,5 +255,5 @@ class SystemTab:
         self.cfg.save_config()
         self.refresh()
         self._show_placeholder()
-        log.info("모든 시스템 항목을 기본값으로 초기화함")
-        messagebox.showinfo("초기화 완료", "모든 시스템 항목이 기본값으로 복구되었습니다.")
+        log.info(t("system_tab.log_reset_done"))
+        messagebox.showinfo(t("system_tab.title_reset_done"), t("system_tab.msg_reset_done"))
