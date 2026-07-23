@@ -33,9 +33,10 @@ from core import lcf
 from tabs.item_tab import ItemTab
 from tabs.skill_tab import SkillTab
 from tabs.system_tab import SystemTab
+from tabs.actor_tab import ActorTab
 
 # 새 탭은 여기에 한 줄만 추가하면 자동으로 로드됩니다.
-TAB_CLASSES = [ItemTab, SkillTab, SystemTab]
+TAB_CLASSES = [ItemTab, SkillTab, SystemTab, ActorTab]
 
 LOG_PANEL_HEIGHT = 7
 
@@ -52,6 +53,8 @@ class App:
         self.edb_master_item_types = {}
         self.edb_master_skills = {}
         self.edb_master_skill_stats = {}
+        self.edb_master_actors = {}
+        self.edb_master_actor_data = {}
         self.tabs = []
 
         apply_dark_theme(self.root)
@@ -81,12 +84,14 @@ class App:
     # edb 동기화 (core.lcf 위임)
     # ------------------------------------------------------------------
     def sync_edb_master_data(self):
-        items, item_types, skills, skill_stats = lcf.decompile_and_parse_edb_directly(self.cfg)
+        items, item_types, skills, skill_stats, actors, actor_data = lcf.decompile_and_parse_edb_directly(self.cfg)
         if items is not None:
             self.edb_master_items = items
             self.edb_master_item_types = item_types
             self.edb_master_skills = skills
             self.edb_master_skill_stats = skill_stats
+            self.edb_master_actors = actors
+            self.edb_master_actor_data = actor_data
 
     def notify_tabs_project_loaded(self):
         """탭이 프로젝트별 마이그레이션(예: 예전 스킬 저장 형식 변환)이 필요하면

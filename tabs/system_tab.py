@@ -13,6 +13,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from core.theme import FG_DIM, attach_tree_scrollbar, make_listbox_with_scroll, make_checkbutton, enable_column_sort, enable_column_width_persistence
+from core.context_menu import attach_row_context_menu
 from core.property_panel import make_fixed_scroll_panel, render_field_row, render_group_header, scroll_panel_to_top, DETAIL_WIDTH, DETAIL_HEIGHT
 from core.logger import log
 from core.i18n import t, t_field
@@ -68,6 +69,7 @@ class SystemTab:
         self.sys_tree.bind("<<TreeviewSelect>>", self.on_sys_select)
         enable_column_sort(self.sys_tree, columns, numeric_columns=("최대값",))
         enable_column_width_persistence(self.sys_tree, self.cfg, "sys_tree")
+        attach_row_context_menu(self.sys_tree, lambda: self.move_sys_entry(-1), lambda: self.move_sys_entry(1))
 
         sys_side_frame = ttk.Frame(sys_frame, padding=(10, 0))
         sys_side_frame.pack(fill="y", side="right")
@@ -145,6 +147,26 @@ class SystemTab:
 
     def find_sys_def(self, name):
         return self.cfg.find_sys_def(name)
+
+    def move_sys_entry(self, direction):
+        """필터링된 목록에서 위/아래로 인접한 항목과 실제 순서를 맞바꿉니다
+        (system_limits가 dict이므로, 두 키의 삽입 순서를 바꿔 저장합니다)."""
+        sel = self.sys_tree.selection()
+        if not sel: return
+        key = sel[0]
+        visible = list(self.sys_tree.get_children(""))
+        idx = visible.index(key)
+        new_idx = idx + direction
+        if not (0 <= new_idx < len(visible)): return
+        other_key = visible[new_idx]
+
+        limits = self.cfg.current_config["system_limits"]
+        keys = list(limits.keys())
+        i1, i2 = keys.index(key), keys.index(other_key)
+        keys[i1], keys[i2] = keys[i2], keys[i1]
+        self.cfg.current_config["system_limits"] = {k: limits[k] for k in keys}
+        self.cfg.save_config()
+        self.refresh()
 
     # ------------------------------------------------------------------
     # 타입별 동적 편집 패널 (고정 크기 패널 안에서만 스크롤)

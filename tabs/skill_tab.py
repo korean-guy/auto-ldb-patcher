@@ -20,6 +20,7 @@ from tkinter import ttk, messagebox
 
 from core.theme import (attach_tree_scrollbar, make_listbox_with_scroll,
                          enable_column_sort, enable_column_width_persistence)
+from core.context_menu import attach_row_context_menu
 from core.property_panel import (make_fixed_scroll_panel, render_field_row, render_group_header,
                                   scroll_panel_to_top, scroll_panel_to_widget, DETAIL_WIDTH, DETAIL_HEIGHT)
 from core.skill_schema import SKILL_FIELD_DEFS, default_skill_fields, migrate_skill_entry
@@ -82,6 +83,7 @@ class SkillTab:
         self.skill_tree.bind("<<TreeviewSelect>>", self.on_skill_select)
         enable_column_sort(self.skill_tree, columns, numeric_columns=("ID", "위력", "공격력배율", "정신력배율", "크리티컬확률"))
         enable_column_width_persistence(self.skill_tree, self.cfg, "skill_tree")
+        attach_row_context_menu(self.skill_tree, lambda: self.move_skill(-1), lambda: self.move_skill(1), self.delete_skill_rule)
 
         skill_btn_frame = ttk.Frame(skill_frame, padding=10)
         skill_btn_frame.pack(fill="y", side="right")
@@ -148,7 +150,7 @@ class SkillTab:
         for item in self.skill_tree.get_children(): self.skill_tree.delete(item)
         for sk in self.cfg.current_config.get("skills", []):
             sid = sk["id"]
-            name = self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
+            name = sk.get("fields", {}).get("name") or self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
             fields = sk.get("fields", {})
             rating = fields.get("power", 0)
             phys = fields.get("physical_rate", 0)
@@ -206,6 +208,7 @@ class SkillTab:
                 if not messagebox.askyesno(t("common.title_warning"), t("skill_tab.msg_confirm_add_unknown")):
                     return
             fields = default_skill_fields()
+            fields["name"] = self.app.edb_master_skills.get(sid, "")
             real_stats = self.app.edb_master_skill_stats.get(sid, {})
             for key in STAT_FIELDS_FROM_EDB:
                 if key in real_stats:
@@ -229,7 +232,7 @@ class SkillTab:
         fields = sk["fields"]
         p = self.skill_detail_frame
 
-        name = self.app.edb_master_skills.get(sk["id"], t("common.name_unknown"))
+        name = sk["fields"].get("name") or self.app.edb_master_skills.get(sk["id"], t("common.name_unknown"))
         ttk.Label(p, text=t("skill_tab.detail_header", id=sk['id'], name=name), font=("Segoe UI", 10, "bold"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=(8, 4))
 
@@ -298,6 +301,19 @@ class SkillTab:
     # ------------------------------------------------------------------
     # 스킬 목록 추가/삭제/일괄 설정
     # ------------------------------------------------------------------
+    def move_skill(self, direction):
+        sel = self.skill_tree.selection()
+        if not sel: return
+        sid = int(sel[0])
+        skills = self.cfg.current_config["skills"]
+        idx = next((i for i, s in enumerate(skills) if s["id"] == sid), None)
+        if idx is None: return
+        new_idx = idx + direction
+        if 0 <= new_idx < len(skills):
+            skills[idx], skills[new_idx] = skills[new_idx], skills[idx]
+            self.cfg.save_config()
+            self.app.refresh_all_tabs()
+
     def add_skill_rule(self):
         try:
             sid = int(self.skill_id_entry.get().strip())

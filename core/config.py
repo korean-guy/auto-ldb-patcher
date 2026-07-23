@@ -66,12 +66,12 @@ DEFAULT_SYSTEM_DEFS = {
     "easyrpg_variable_min_value": {
         "type": "int", "name": "변수 최소값", "group": "일반",
         "description": "게임 변수의 최소값입니다.",
-        "value": -1, "default": -1, "max": 2147483646,
+        "value": 0, "default": 0, "max": 2147483646,
     },
     "easyrpg_variable_max_value": {
         "type": "int", "name": "변수 최대값", "group": "일반",
         "description": "게임 변수의 최대값입니다.",
-        "value": -1, "default": -1, "max": 2147483646,
+        "value": 0, "default": 0, "max": 2147483646,
     },
     "easyrpg_use_rpg2k_battle_system": {
         "type": "bool", "name": "RPG2000 전투 시스템 사용", "group": "전투",
@@ -160,6 +160,25 @@ def write_json_safe(path, data):
         return False
 
 
+def fix_invalid_variable_bounds(system_limits):
+    """easyrpg_variable_min_value / easyrpg_variable_max_value는 -1을 지정하면
+    게임 실행 중 잘못된 값으로 강제 종료되는 것이 확인되어, 이미 저장된 프로젝트에
+    -1이 남아있다면 0으로 되돌립니다 (value뿐 아니라 "기본값 초기화" 버튼을 눌렀을 때
+    다시 -1로 돌아가지 않도록 default도 함께 고칩니다). 실제로 뭔가 고쳤으면 True를 반환합니다."""
+    changed = False
+    for key in ("easyrpg_variable_min_value", "easyrpg_variable_max_value"):
+        defn = system_limits.get(key)
+        if not isinstance(defn, dict):
+            continue
+        if defn.get("value") == -1:
+            defn["value"] = 0
+            changed = True
+        if defn.get("default") == -1:
+            defn["default"] = 0
+            changed = True
+    return changed
+
+
 # ------------------------------------------------------------------
 # ConfigManager: 공통 설정 + 프로젝트(게임별) 설정 + 프로젝트(ldb) 선택
 # ------------------------------------------------------------------
@@ -215,6 +234,8 @@ class ConfigManager:
         else:
             self.common_config["system_limits"] = migrate_system_limits(self.common_config["system_limits"])
             self.common_config["system_limits"] = merge_system_defs(self.common_config["system_limits"], DEFAULT_SYSTEM_DEFS)
+        if fix_invalid_variable_bounds(self.common_config["system_limits"]):
+            changed = True
         if changed:
             self.save_common_config()
         log.info(t("config.log_common_loaded"))
@@ -277,16 +298,18 @@ class ConfigManager:
         def factory():
             return {
                 "system_limits": copy.deepcopy(self.common_config.get("system_limits", DEFAULT_SYSTEM_DEFS)),
-                "items": [], "skills": [],
+                "items": [], "skills": [], "actors": [],
             }
 
         self.current_config = read_json_safe(self.project_config_file, factory)
 
         if "items" not in self.current_config: self.current_config["items"] = []
         if "skills" not in self.current_config: self.current_config["skills"] = []
+        if "actors" not in self.current_config: self.current_config["actors"] = []
 
         migrated = migrate_system_limits(self.current_config.get("system_limits", {}))
         merged = merge_system_defs(migrated, self.common_config.get("system_limits", DEFAULT_SYSTEM_DEFS))
+        fix_invalid_variable_bounds(merged)
         self.current_config["system_limits"] = merged
 
         self.save_config()

@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox
 
 from core.theme import (attach_tree_scrollbar, make_listbox_with_scroll,
                          enable_column_sort, enable_column_width_persistence)
+from core.context_menu import attach_row_context_menu
 from core.property_panel import (make_fixed_scroll_panel, render_field_row, render_group_header,
                                   scroll_panel_to_top, DETAIL_WIDTH, DETAIL_HEIGHT)
 from core.item_schema import ITEM_FIELD_DEFS, default_item_fields, migrate_item_entry
@@ -61,6 +62,7 @@ class ItemTab:
         self.item_tree.bind("<<TreeviewSelect>>", self.on_item_select)
         enable_column_sort(self.item_tree, ("ID", "이름", "타입", "최대수량"), numeric_columns=("ID", "최대수량"))
         enable_column_width_persistence(self.item_tree, self.cfg, "item_tree")
+        attach_row_context_menu(self.item_tree, lambda: self.move_item(-1), lambda: self.move_item(1), self.delete_item_rule)
 
         item_btn_frame = ttk.Frame(item_frame, padding=10)
         item_btn_frame.pack(fill="y", side="right")
@@ -113,7 +115,7 @@ class ItemTab:
         for item in self.item_tree.get_children(): self.item_tree.delete(item)
         for it in self.cfg.current_config.get("items", []):
             iid = it["id"]
-            name = self.app.edb_master_items.get(iid) or t("common.msg_not_in_master_db")
+            name = it.get("fields", {}).get("name") or self.app.edb_master_items.get(iid) or t("common.msg_not_in_master_db")
             type_code = self.app.edb_master_item_types.get(iid)
             type_name = t(f"item_type.{type_code}") if type_code is not None else "-"
             max_count = it.get("fields", {}).get("easyrpg_max_count", -1)
@@ -166,7 +168,9 @@ class ItemTab:
             if iid not in self.app.edb_master_items:
                 if not messagebox.askyesno(t("common.title_warning"), t("item_tab.msg_confirm_add_unknown")):
                     return
-            existing = {"id": iid, "fields": default_item_fields()}
+            fields = default_item_fields()
+            fields["name"] = self.app.edb_master_items.get(iid, "")
+            existing = {"id": iid, "fields": fields}
             self.cfg.current_config["items"].append(existing)
             self.cfg.save_config()
             log.info(t("item_tab.log_added", id=iid))
@@ -184,7 +188,7 @@ class ItemTab:
         fields = it["fields"]
         p = self.item_detail_frame
 
-        name = self.app.edb_master_items.get(it["id"], t("common.name_unknown"))
+        name = it["fields"].get("name") or self.app.edb_master_items.get(it["id"], t("common.name_unknown"))
         ttk.Label(p, text=t("item_tab.detail_header", id=it['id'], name=name), font=("Segoe UI", 10, "bold"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=(8, 4))
 
@@ -239,6 +243,19 @@ class ItemTab:
     # ------------------------------------------------------------------
     # 목록 추가/삭제/일괄 설정
     # ------------------------------------------------------------------
+    def move_item(self, direction):
+        sel = self.item_tree.selection()
+        if not sel: return
+        iid = int(sel[0])
+        items = self.cfg.current_config["items"]
+        idx = next((i for i, it in enumerate(items) if it["id"] == iid), None)
+        if idx is None: return
+        new_idx = idx + direction
+        if 0 <= new_idx < len(items):
+            items[idx], items[new_idx] = items[new_idx], items[idx]
+            self.cfg.save_config()
+            self.app.refresh_all_tabs()
+
     def add_item_rule(self):
         try:
             iid = int(self.item_id_entry.get().strip())

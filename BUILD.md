@@ -8,11 +8,13 @@ core/
     utils.py            # 경로/문자열/ini파싱/스키마 변환 등 순수 유틸
     theme.py             # 다크 테마 색상 + 위젯 헬퍼 + 트리뷰 정렬/컬럼폭 저장 헬퍼
     i18n.py               # 다국어 문자열 리소스 조회(t()) - 아래 "다국어 지원" 항목 참고
+    context_menu.py        # 좌측 리스트 공통 우클릭 메뉴(위로/아래로 이동, 삭제)
     config.py            # JSON 읽기/쓰기, 공통·프로젝트 config 관리, 프로젝트(ldb) 선택
     logger.py            # 콘솔 대신 GUI 로그 패널로 출력하는 전역 로거
-    property_panel.py    # System/Skill/Item 탭이 공유하는 "속성 편집기" 공통 컴포넌트
+    property_panel.py    # System/Skill/Item/Actor 탭이 공유하는 "속성 편집기" 공통 컴포넌트
     skill_schema.py       # 스킬별 EasyRPG 옵션 정의 + 예전 버전 마이그레이션
     item_schema.py         # 아이템별 EasyRPG 옵션 정의 + 예전 버전 마이그레이션
+    actor_schema.py         # 액터별 EasyRPG 옵션/경험치/능력치 성장 정의
     lcf.py                # lcf2xml 실행, edb 파싱, 최종 패치(edb→ldb)
     locales/
         ko.json            # 한국어 UI 문자열 리소스 (현재 유일한 언어)
@@ -21,6 +23,7 @@ tabs/
     item_tab.py
     skill_tab.py
     system_tab.py
+    actor_tab.py
 lcf2xml.exe        # (직접 준비)
 config.json         # 최초 실행 시 자동 생성됨 (미리 안 넣어도 됨)
 projects/            # 최초 실행 시 자동 생성됨

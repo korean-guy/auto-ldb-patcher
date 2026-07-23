@@ -11,6 +11,9 @@ EasyRPG가 실제로 Skill 노드에서 사용하는 표기법입니다).
 """
 
 SKILL_FIELD_DEFS = [
+    {"name": "name", "label": "이름", "type": "string", "group": "전투",
+     "default": "", "skip_if_empty": True,
+     "description": "스킬 이름입니다. 알만툴 편집기의 글자 수 제한과 무관하게 자유롭게 입력할 수 있습니다."},
     {"name": "power", "label": "기본 위력", "type": "int", "group": "전투",
      "default": 0, "max": 9999,
      "description": "스킬의 기본 위력(데미지 계산에 사용)입니다."},
