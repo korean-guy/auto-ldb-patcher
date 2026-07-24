@@ -30,13 +30,13 @@ from core.logger import log
 from core.i18n import t
 from core import lcf
 
-from tabs.item_tab import ItemTab
-from tabs.skill_tab import SkillTab
-from tabs.system_tab import SystemTab
 from tabs.actor_tab import ActorTab
+from tabs.skill_tab import SkillTab
+from tabs.item_tab import ItemTab
+from tabs.system_tab import SystemTab
 
 # 새 탭은 여기에 한 줄만 추가하면 자동으로 로드됩니다.
-TAB_CLASSES = [ItemTab, SkillTab, SystemTab, ActorTab]
+TAB_CLASSES = [ActorTab, SkillTab, ItemTab, SystemTab]
 
 LOG_PANEL_HEIGHT = 7
 

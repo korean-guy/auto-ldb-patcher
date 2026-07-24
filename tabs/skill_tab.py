@@ -119,7 +119,7 @@ class SkillTab:
         # 그룹 개수가 늘어나도 폭이 절대 DETAIL_WIDTH를 넘지 않도록 버튼 나열 대신
         # 드롭다운 하나로 구현합니다 (버튼을 옆으로 계속 늘어놓으면 옵션이 늘어날 때마다
         # 우측 패널 폭이 함께 넓어져서 좌측 목록 영역이 다른 탭보다 좁아지는 문제가 있었습니다).
-        nav_frame = ttk.Frame(skill_btn_frame, width=DETAIL_WIDTH)
+        nav_frame = ttk.Frame(skill_btn_frame, width=DETAIL_WIDTH, height=32)
         nav_frame.pack_propagate(False)
         nav_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(nav_frame, text=t("skill_tab.label_group_jump")).pack(side="left", padx=(0, 4))

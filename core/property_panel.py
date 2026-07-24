@@ -113,6 +113,50 @@ def scroll_panel_to_widget(outer, widget):
     canvas.yview_moveto(fraction)
 
 
+def make_horizontal_scroll_panel(parent, width, height):
+    """make_fixed_scroll_panel()의 가로 스크롤 버전. 레벨별 능력치 표처럼 옆으로
+    넓은 그리드를 담을 때 사용합니다. 높이는 고정, 폭 방향으로만 스크롤됩니다."""
+    outer = tk.Frame(parent, bg=BG, width=width, height=height,
+                      highlightthickness=1, highlightbackground=BORDER)
+    outer.pack_propagate(False)
+
+    canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
+    hsb = ttk.Scrollbar(outer, orient="horizontal", command=canvas.xview)
+    inner = tk.Frame(canvas, bg=BG)
+
+    inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+    canvas.configure(xscrollcommand=hsb.set)
+
+    def _on_inner_configure(event):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+    inner.bind("<Configure>", _on_inner_configure)
+
+    def _on_canvas_configure(event):
+        canvas.itemconfig(inner_id, height=event.height)
+    canvas.bind("<Configure>", _on_canvas_configure)
+
+    def _on_mousewheel(event):
+        canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _activate(event):
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        canvas.bind_all("<Shift-MouseWheel>", _on_mousewheel)
+
+    def _deactivate(event):
+        canvas.unbind_all("<MouseWheel>")
+        canvas.unbind_all("<Shift-MouseWheel>")
+
+    outer.bind("<Enter>", _activate)
+    outer.bind("<Leave>", _deactivate)
+
+    # 스크롤바를 먼저 배치해 자기 몫의 높이를 확보한 뒤, 캔버스가 나머지 공간을 채웁니다.
+    hsb.pack(side="bottom", fill="x")
+    canvas.pack(side="top", fill="both", expand=True)
+
+    outer.scroll_canvas = canvas
+    return outer, inner
+
+
 def render_group_header(parent, text):
     ttk.Label(parent, text=text, font=("Segoe UI", 10, "bold"),
               foreground="#7fb6e0").pack(anchor="w", pady=(14, 2))
