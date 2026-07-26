@@ -248,7 +248,10 @@ class ConfigManager:
         """RPG_RT.ldb 파일을 선택하게 하고, 선택된 파일의 폴더를 프로젝트로 인식합니다.
         폴더를 먼저 고르고 검증하던 예전 방식보다 실수(잘못된 폴더 선택)가 훨씬 줄어듭니다."""
         last_dir = self.common_config.get("last_game_dir", "")
-        initial = last_dir if last_dir and os.path.isdir(last_dir) else os.getcwd()
+        # os.getcwd()를 기본값으로 쓰면 실행 방식에 따라 C:\Windows\System32 같은
+        # 예상치 못한 폴더가 나올 수 있어서, 마지막으로 연 폴더가 없으면 프로그램 자신의
+        # 폴더(exe/py가 있는 위치)를 기준으로 시작합니다.
+        initial = last_dir if last_dir and os.path.isdir(last_dir) else self.program_dir
         while True:
             file_path = filedialog.askopenfilename(
                 title=t("config.dialog_select_ldb_title"),

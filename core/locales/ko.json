@@ -204,6 +204,8 @@
   "actor_tab.btn_apply_target": "적용",
   "actor_tab.btn_close": "닫기",
   "actor_tab.msg_invalid_number": "숫자를 정확히 입력해 주세요.",
+  "actor_tab.label_stat_checkboxes": "적용할 능력치 선택:",
+  "actor_tab.msg_no_stat_selected": "적용할 능력치를 하나 이상 체크해 주세요.",
   "actor_tab.log_stat_batch_applied": "액터 {id} - Lv.100~{max} 능력치 일괄 적용: {method}",
 
   "type_label.int": "정수",
