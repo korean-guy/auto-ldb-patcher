@@ -17,25 +17,26 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from core.theme import (attach_tree_scrollbar, make_listbox_with_scroll,
-                         enable_column_sort, enable_column_width_persistence, FG_DIM, BG, BG2, FG, BORDER)
+                         enable_column_sort, enable_column_width_persistence, FG_DIM)
 from core.context_menu import attach_row_context_menu
-from core.property_panel import (make_fixed_scroll_panel, make_horizontal_scroll_panel, render_field_row, render_group_header,
+from core.property_panel import (make_fixed_scroll_panel, render_field_row, render_group_header,
                                   scroll_panel_to_top, scroll_panel_to_widget, DETAIL_WIDTH, DETAIL_HEIGHT)
 from core.actor_schema import (ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS, STAT_ARRAY_LABELS, ABSOLUTE_MAX_LEVEL,
                                 default_actor_fields, migrate_actor_entry, resize_stat_array)
+from core.stat_editor_popup import open_stat_editor_popup
 from core.logger import log
 from core.i18n import t
 
 ACTOR_GROUPS_ORDERED = [t("actor_tab.group_level")] + list(dict.fromkeys(fd.get("group", "기타") for fd in ACTOR_FIELD_DEFS))
 
-# 레벨 100+ 편집 팝업에서 다루는 6개 능력치 (표시 순서: MaxHP, MaxSP, Attack, Defense, Mind, Agility)
+# 능력치 편집 팝업에서 다루는 6개 능력치 (표시 순서: MaxHP, MaxSP, Attack, Defense, Mind, Agility)
+# - core/stat_editor_popup.py가 이 목록과 라벨 키를 그대로 받아 Lv.1~99 / Lv.100~N 탭을 그려줍니다.
 STAT_POPUP_KEYS = ["maxhp", "maxsp", "attack", "defense", "spirit", "agility"]
 STAT_POPUP_LABEL_KEYS = {
-    "maxhp": "actor_tab.label_stat_maxhp", "maxsp": "actor_tab.label_stat_maxsp",
-    "attack": "actor_tab.label_stat_attack", "defense": "actor_tab.label_stat_defense",
-    "spirit": "actor_tab.label_stat_spirit", "agility": "actor_tab.label_stat_agility",
+    "maxhp": "stat_label.maxhp", "maxsp": "stat_label.maxsp",
+    "attack": "stat_label.attack", "defense": "stat_label.defense",
+    "spirit": "stat_label.spirit", "agility": "stat_label.agility",
 }
-POPUP_EDIT_START_LEVEL = 100
 
 
 class ActorTab:
@@ -449,175 +450,11 @@ class ActorTab:
         log.info(t("actor_tab.log_batch_apply_done", count=len(actors)))
         messagebox.showinfo(t("common.title_done"), t("actor_tab.msg_batch_apply_done", count=len(actors)))
 
+
     # ------------------------------------------------------------------
-    # 레벨 100+ 능력치 직접 편집 팝업
+    # 레벨별 능력치 직접 편집 팝업 (공통 컴포넌트 재사용)
     # ------------------------------------------------------------------
     def open_stat_editor_popup(self, ac):
-        root = self.app.root
-        main_w = max(root.winfo_width(), 800)
-        main_h = max(root.winfo_height(), 600)
-        popup = tk.Toplevel(root, bg=BG)
         name = self.app.edb_master_actors.get(ac["id"], t("common.name_unknown"))
-        popup.title(t("actor_tab.stat_editor_title", name=name))
-        popup.geometry(f"{main_w}x{main_h // 3}")
-        popup.transient(root)
-
-        final_level = ac.get("final_level", 0)
-
-        header = ttk.Frame(popup, padding=10)
-        header.pack(fill="x", side="top")
-        ttk.Label(header, text=t("actor_tab.stat_editor_notice", max=final_level),
-                  foreground=FG_DIM, wraplength=main_w - 40).pack(anchor="w")
-
-        if final_level < POPUP_EDIT_START_LEVEL:
-            ttk.Label(popup, text=t("actor_tab.stat_editor_no_levels"), padding=20).pack(anchor="w")
-            ttk.Button(popup, text=t("actor_tab.btn_close"), command=popup.destroy).pack(pady=10)
-            return
-
-        # ---- 하단 일괄 편집 컨트롤 ----
-        # 그리드보다 먼저 side="bottom"으로 배치해서 자기 높이만큼 공간을 먼저 확보합니다.
-        # (그리드를 먼저 expand로 채우면 컨트롤 영역이 밀려서 안 보이게 되므로 순서가 중요합니다 -
-        #  core/property_panel.py의 스크롤바 배치와 같은 이유입니다.)
-        control = ttk.Frame(popup, padding=(10, 0, 10, 10))
-        control.pack(fill="x", side="bottom")
-
-        # 그리드 영역은 남는 공간을 전부 차지합니다 (control을 먼저 배치했으므로 항상 자리가 남습니다).
-        grid_outer, grid_inner = make_horizontal_scroll_panel(popup, width=main_w - 20, height=180)
-        grid_outer.pack(padx=10, pady=(0, 10), fill="both", expand=True, side="top")
-
-        def rebuild_grid():
-            for w in grid_inner.winfo_children():
-                w.destroy()
-            levels = list(range(POPUP_EDIT_START_LEVEL, final_level + 1))
-
-            corner = tk.Label(grid_inner, text=t("actor_tab.col_level_header"), bg=BG2, fg=FG,
-                               width=16, relief="ridge", anchor="w")
-            corner.grid(row=0, column=0, sticky="nsew")
-            for j, level in enumerate(levels):
-                tk.Label(grid_inner, text=f"Lv.{level}", bg=BG2, fg=FG, width=7, relief="ridge").grid(row=0, column=j + 1, sticky="nsew")
-
-            for i, key in enumerate(STAT_POPUP_KEYS):
-                tk.Label(grid_inner, text=t(STAT_POPUP_LABEL_KEYS[key]), bg=BG2, fg=FG,
-                         width=16, anchor="w", relief="ridge").grid(row=i + 1, column=0, sticky="nsew")
-                for j, level in enumerate(levels):
-                    idx = level - 1
-                    values = ac["parameters"].setdefault(key, [])
-                    current_val = values[idx] if idx < len(values) else 0
-                    entry = tk.Entry(grid_inner, width=7, bg=BG2, fg=FG, insertbackground=FG,
-                                      relief="flat", justify="center")
-                    entry.insert(0, str(current_val))
-                    entry.grid(row=i + 1, column=j + 1, padx=1, pady=1, sticky="nsew")
-
-                    def _commit(event=None, key=key, idx=idx, entry=entry):
-                        try:
-                            v = int(entry.get().strip())
-                        except ValueError:
-                            entry.delete(0, tk.END)
-                            entry.insert(0, str(ac["parameters"][key][idx]))
-                            return
-                        ac["parameters"][key][idx] = v
-                        self.cfg.save_config()
-                        self.app.refresh_all_tabs()
-
-                    entry._commit = _commit
-                    entry.bind("<Return>", _commit)
-                    entry.bind("<FocusOut>", _commit)
-
-        rebuild_grid()
-
-        def _lv99_value(key):
-            values = ac["parameters"].get(key, [])
-            return values[98] if len(values) > 98 else 0
-
-        def apply_fill_lv99():
-            # 99레벨 일괄 적용은 항상 6개 능력치 전부에 적용됩니다 (전체 초기화 성격의 동작이라
-            # 체크박스 선택과 무관하게 동작합니다).
-            for key in STAT_POPUP_KEYS:
-                base_val = _lv99_value(key)
-                values = ac["parameters"].setdefault(key, [])
-                for level in range(POPUP_EDIT_START_LEVEL, final_level + 1):
-                    values[level - 1] = base_val
-            self.cfg.save_config()
-            self.app.refresh_all_tabs()
-            log.info(t("actor_tab.log_stat_batch_applied", id=ac["id"], max=final_level, method=t("actor_tab.btn_fill_lv99")))
-            rebuild_grid()
-
-        # ---- 능력치별 선택 체크박스 ----
-        # "레벨당 +N 상승"과 "목표치까지 점진적 상승" 두 기능은 아래 체크박스에서 선택된
-        # 능력치에만 적용됩니다. 예) HP만 체크하고 +100 적용 -> HP만 레벨당 100씩 상승하고
-        # 나머지 능력치는 그대로 유지됩니다. 이후 체크를 SP로 바꾸고 +50을 적용해도 앞서 적용한
-        # HP 값은 그대로 남아있고 SP만 추가로 바뀝니다 (서로 덮어쓰지 않고 독립적으로 누적 적용).
-        # 매번 적용 전에 원하는 능력치만 체크한 뒤 버튼을 눌러 사용하세요.
-        stat_check_vars = {key: tk.BooleanVar(value=True) for key in STAT_POPUP_KEYS}
-
-        def _selected_keys():
-            return [key for key in STAT_POPUP_KEYS if stat_check_vars[key].get()]
-
-        def apply_increment():
-            keys = _selected_keys()
-            if not keys:
-                messagebox.showwarning(t("common.title_warning"), t("actor_tab.msg_no_stat_selected"))
-                return
-            try:
-                n = int(increment_entry.get().strip())
-            except ValueError:
-                messagebox.showerror(t("common.title_error"), t("actor_tab.msg_invalid_number"))
-                return
-            for key in keys:
-                base_val = _lv99_value(key)
-                values = ac["parameters"].setdefault(key, [])
-                for level in range(POPUP_EDIT_START_LEVEL, final_level + 1):
-                    values[level - 1] = base_val + n * (level - 99)
-            self.cfg.save_config()
-            self.app.refresh_all_tabs()
-            log.info(t("actor_tab.log_stat_batch_applied", id=ac["id"], max=final_level,
-                       method=t("actor_tab.label_increment") + f" {n} ({', '.join(keys)})"))
-            rebuild_grid()
-
-        def apply_target():
-            keys = _selected_keys()
-            if not keys:
-                messagebox.showwarning(t("common.title_warning"), t("actor_tab.msg_no_stat_selected"))
-                return
-            try:
-                target = int(target_entry.get().strip())
-            except ValueError:
-                messagebox.showerror(t("common.title_error"), t("actor_tab.msg_invalid_number"))
-                return
-            span = final_level - 99
-            if span <= 0:
-                return
-            for key in keys:
-                base_val = _lv99_value(key)
-                values = ac["parameters"].setdefault(key, [])
-                for level in range(POPUP_EDIT_START_LEVEL, final_level + 1):
-                    fraction = (level - 99) / span
-                    values[level - 1] = round(base_val + fraction * (target - base_val))
-            self.cfg.save_config()
-            self.app.refresh_all_tabs()
-            log.info(t("actor_tab.log_stat_batch_applied", id=ac["id"], max=final_level,
-                       method=t("actor_tab.label_target") + f" {target} ({', '.join(keys)})"))
-            rebuild_grid()
-
-        row1 = ttk.Frame(control); row1.pack(fill="x", pady=2)
-        ttk.Button(row1, text=t("actor_tab.btn_fill_lv99"), command=apply_fill_lv99).pack(side="left")
-
-        check_row = ttk.Frame(control); check_row.pack(fill="x", pady=(6, 2))
-        ttk.Label(check_row, text=t("actor_tab.label_stat_checkboxes"), foreground=FG_DIM).pack(side="left", padx=(0, 8))
-        for key in STAT_POPUP_KEYS:
-            cb = tk.Checkbutton(check_row, text=t(STAT_POPUP_LABEL_KEYS[key]), variable=stat_check_vars[key],
-                                 bg=BG, fg=FG, selectcolor=BG2, activebackground=BG, activeforeground=FG,
-                                 highlightthickness=0)
-            cb.pack(side="left", padx=4)
-
-        row2 = ttk.Frame(control); row2.pack(fill="x", pady=2)
-        ttk.Label(row2, text=t("actor_tab.label_increment")).pack(side="left", padx=(0, 4))
-        increment_entry = ttk.Entry(row2, width=10); increment_entry.insert(0, "0"); increment_entry.pack(side="left", padx=(0, 4))
-        ttk.Button(row2, text=t("actor_tab.btn_apply_increment"), command=apply_increment).pack(side="left")
-
-        row3 = ttk.Frame(control); row3.pack(fill="x", pady=2)
-        ttk.Label(row3, text=t("actor_tab.label_target")).pack(side="left", padx=(0, 4))
-        target_entry = ttk.Entry(row3, width=10); target_entry.insert(0, "0"); target_entry.pack(side="left", padx=(0, 4))
-        ttk.Button(row3, text=t("actor_tab.btn_apply_target"), command=apply_target).pack(side="left")
-
-        ttk.Button(control, text=t("actor_tab.btn_close"), command=popup.destroy).pack(anchor="e", pady=(6, 0))
+        open_stat_editor_popup(self.app, self.cfg, ac, name, ac.get("final_level", 0),
+                                STAT_POPUP_KEYS, STAT_POPUP_LABEL_KEYS)

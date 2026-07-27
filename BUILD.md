@@ -15,6 +15,8 @@ core/
     skill_schema.py       # 스킬별 EasyRPG 옵션 정의 + 예전 버전 마이그레이션
     item_schema.py         # 아이템별 EasyRPG 옵션 정의 + 예전 버전 마이그레이션
     actor_schema.py         # 액터별 EasyRPG 옵션/경험치/능력치 성장 정의
+    class_schema.py          # 클래스별 경험치/능력치 성장 정의
+    stat_editor_popup.py      # Actor/Class 탭이 공유하는 "레벨별 능력치 편집" 팝업
     lcf.py                # lcf2xml 실행, edb 파싱, 최종 패치(edb→ldb)
     locales/
         ko.json            # 한국어 UI 문자열 리소스 (현재 유일한 언어)
@@ -24,6 +26,7 @@ tabs/
     skill_tab.py
     system_tab.py
     actor_tab.py
+    class_tab.py
 lcf2xml.exe        # (직접 준비)
 config.json         # 최초 실행 시 자동 생성됨 (미리 안 넣어도 됨)
 projects/            # 최초 실행 시 자동 생성됨
