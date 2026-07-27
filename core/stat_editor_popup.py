@@ -9,14 +9,16 @@ Actor 탭, Class 탭 등 "레벨(단계)별 능력치 배열"을 갖는 개체�
 하나로 이어진 공백 구분 문자열입니다 - UI만 두 구간으로 나뉘어 있을 뿐, entry["parameters"]
 자체는 항상 하나의 연속된 배열입니다.
 
+두 탭 모두 동일한 일괄 설정 도구를 제공합니다. 각 탭의 "기준 레벨(anchor)"은
+Lv.1~99 탭은 Lv.1, Lv.100~N 탭은 Lv.99이며, "레벨당 상승"류 계산은 이 기준 레벨의
+현재 값에서부터 누적됩니다.
+
 [오버플로우 방지에 대한 참고]
 RPG Maker 2003에서 능력치 파라미터를 편집기에서 직접 다시 저장했을 때 값이
 1/0/6/7/1/1 같은 값으로 깨지는 현상이 보고되어, 능력치 값에 상한(MAX_STAT_VALUE)을
 두었습니다. RPG Maker 2000/2003의 데이터베이스 편집기가 능력치류 수치를 전통적으로
 9999까지만 받는 것으로 알려져 있어 이 값을 상한으로 잡았습니다 - 정확한 한계값을
-알고 계시면 이 상수만 바꾸면 됩니다. 배열 길이 자체(레벨 수)는 이미 항상 정확히
-final_level과 같게 유지되고 있어(개수 불일치로 인한 문제는 이미 처리되어 있음),
-이번 상한은 "개수"가 아니라 "값 자체의 크기"에 대한 안전장치입니다.
+알고 계시면 이 상수만 바꾸면 됩니다.
 """
 import random
 import tkinter as tk
@@ -50,7 +52,8 @@ def open_stat_editor_popup(app, cfg, entry, entity_label, final_level, stat_keys
     main_h = max(root.winfo_height(), 600)
     popup = tk.Toplevel(root, bg=BG)
     popup.title(t("stat_editor.title", name=entity_label))
-    popup.geometry(f"{main_w}x{main_h // 3}")
+    # 닫기 버튼이 잘리지 않도록 기본 계산 높이(창의 1/3)에 여유분을 더합니다.
+    popup.geometry(f"{main_w}x{(main_h // 3) + 40}")
     popup.transient(root)
 
     header = ttk.Frame(popup, padding=10)
@@ -63,33 +66,31 @@ def open_stat_editor_popup(app, cfg, entry, entity_label, final_level, stat_keys
         ttk.Button(popup, text=t("common.btn_close"), command=popup.destroy).pack(pady=10)
         return
 
+    # 닫기 버튼을 노트북보다 먼저 side="bottom"으로 배치해 항상 자기 공간을 확보합니다.
+    # (먼저 배치하지 않으면 노트북이 남는 공간을 전부 차지해 버튼이 화면 밖으로 밀려
+    #  안 보이게 됩니다 - 이 파일의 다른 스크롤바들과 같은 이유의 같은 처방입니다.)
+    ttk.Button(popup, text=t("common.btn_close"), command=popup.destroy).pack(side="bottom", pady=10)
+
     notebook = ttk.Notebook(popup)
-    notebook.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+    notebook.pack(fill="both", expand=True, padx=10, pady=(0, 10), side="top")
 
     def _on_change():
         cfg.save_config()
         app.refresh_all_tabs()
 
-    # ---- Lv.1~99 탭: 불러온 기존 값을 직접 편집만 가능 (일괄 계산 도구 없음) ----
     low_end = min(LOW_TIER_END, final_level)
     tab_low = ttk.Frame(notebook, padding=5)
     notebook.add(tab_low, text=t("stat_editor.tab_low"))
-    _build_grid_tab(tab_low, entry, stat_keys, stat_label_keys, LOW_TIER_START, low_end, main_w, _on_change)
+    _build_tier_tab(tab_low, entry, stat_keys, stat_label_keys,
+                     anchor_level=LOW_TIER_START, range_start=LOW_TIER_START, range_end=low_end,
+                     main_w=main_w, on_change=_on_change, entity_label=entity_label)
 
-    # ---- Lv.100~N 탭: 그리드 + 일괄 계산 도구 (100레벨 미만이면 탭 자체를 만들지 않음) ----
     if final_level >= HIGH_TIER_START:
         tab_high = ttk.Frame(notebook, padding=5)
         notebook.add(tab_high, text=t("stat_editor.tab_high", max=final_level))
-        _build_high_tier_tab(tab_high, entry, stat_keys, stat_label_keys, final_level, main_w, _on_change,
-                              entity_label)
-
-    ttk.Button(popup, text=t("common.btn_close"), command=popup.destroy).pack(pady=(0, 10))
-
-
-def _build_grid_tab(parent, entry, stat_keys, stat_label_keys, level_start, level_end, main_w, on_change):
-    grid_outer, grid_inner = make_horizontal_scroll_panel(parent, width=main_w - 40, height=180)
-    grid_outer.pack(fill="both", expand=True)
-    _draw_grid(grid_inner, entry, stat_keys, stat_label_keys, level_start, level_end, on_change)
+        _build_tier_tab(tab_high, entry, stat_keys, stat_label_keys,
+                         anchor_level=LOW_TIER_END, range_start=HIGH_TIER_START, range_end=final_level,
+                         main_w=main_w, on_change=_on_change, entity_label=entity_label)
 
 
 def _draw_grid(grid_inner, entry, stat_keys, stat_label_keys, level_start, level_end, on_change):
@@ -130,10 +131,10 @@ def _draw_grid(grid_inner, entry, stat_keys, stat_label_keys, level_start, level
             e.bind("<FocusOut>", _commit)
 
 
-def _build_high_tier_tab(parent, entry, stat_keys, stat_label_keys, final_level, main_w, on_change, entity_label):
-    # 컨트롤(일괄 계산 도구)을 그리드보다 먼저 side="bottom"으로 배치해 필요한 높이를
-    # 항상 먼저 확보합니다 (먼저 배치하지 않으면 그리드가 남는 공간을 전부 차지해
-    # 하단 버튼들이 화면 밖으로 밀려 보이지 않게 됩니다).
+def _build_tier_tab(parent, entry, stat_keys, stat_label_keys, anchor_level, range_start, range_end,
+                     main_w, on_change, entity_label):
+    """탭 하나(Lv.1~99 또는 Lv.100~N)의 그리드 + 일괄 설정 도구를 만듭니다.
+    anchor_level: 일괄 계산의 기준이 되는 레벨(그 레벨의 현재 값에서부터 누적 계산)."""
     control = ttk.Frame(parent, padding=(0, 6, 0, 0))
     control.pack(fill="x", side="bottom")
 
@@ -141,54 +142,35 @@ def _build_high_tier_tab(parent, entry, stat_keys, stat_label_keys, final_level,
     grid_outer.pack(fill="both", expand=True, side="top")
 
     def rebuild_grid():
-        _draw_grid(grid_inner, entry, stat_keys, stat_label_keys, HIGH_TIER_START, final_level, on_change)
+        _draw_grid(grid_inner, entry, stat_keys, stat_label_keys, range_start, range_end, on_change)
 
     rebuild_grid()
 
-    def _lv99_value(key):
+    def _anchor_value(key):
         values = entry["parameters"].get(key, [])
-        return values[LOW_TIER_END - 1] if len(values) >= LOW_TIER_END else 0
+        return values[anchor_level - 1] if len(values) >= anchor_level else 0
 
-    def apply_fill_lv99():
+    def apply_fill_anchor():
         # 전체 초기화 성격의 동작이라 능력치 체크박스 선택과 무관하게 항상 전부 적용됩니다.
         for key in stat_keys:
-            base_val = _lv99_value(key)
+            base_val = _anchor_value(key)
             values = entry["parameters"].setdefault(key, [])
-            for level in range(HIGH_TIER_START, final_level + 1):
+            for level in range(range_start, range_end + 1):
                 values[level - 1] = _clamp(base_val)
         on_change()
-        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=final_level, method=t("stat_editor.btn_fill_lv99")))
+        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=range_end,
+                   method=t("stat_editor.btn_fill_anchor", level=anchor_level)))
         rebuild_grid()
 
     # ---- 능력치별 선택 체크박스 ----
-    # "레벨당 +N", "레벨당 +N ± n% 난수", "목표치까지 점진적 상승" 세 기능은 아래에서
-    # 체크된 능력치에만 적용됩니다. 예) HP만 체크하고 +100을 적용하면 HP만 레벨당 100씩
-    # 오르고 나머지는 그대로입니다. 이후 체크를 SP로 바꿔 +50을 적용해도 앞서 바뀐 HP 값은
-    # 그대로 남고 SP만 추가로 바뀝니다 (서로 덮어쓰지 않고 독립적으로 누적 적용됩니다).
+    # 아래 세 가지 일괄 계산(레벨당 +N ± n% 난수 / 목표치까지 점진적 상승 / 목표치까지
+    # ± n% 난수 상승)은 체크된 능력치에만 적용됩니다. 예) HP만 체크하고 적용하면 HP만
+    # 바뀌고 나머지는 그대로 유지되며, 이후 체크를 SP로 바꿔 다시 적용해도 앞서 바뀐
+    # HP 값은 그대로 남고 SP만 추가로 바뀝니다(서로 덮어쓰지 않고 독립적으로 누적 적용).
     stat_check_vars = {key: tk.BooleanVar(value=True) for key in stat_keys}
 
     def _selected_keys():
         return [key for key in stat_keys if stat_check_vars[key].get()]
-
-    def apply_increment():
-        keys = _selected_keys()
-        if not keys:
-            messagebox.showwarning(t("common.title_warning"), t("stat_editor.msg_no_stat_selected"))
-            return
-        try:
-            n = int(increment_entry.get().strip())
-        except ValueError:
-            messagebox.showerror(t("common.title_error"), t("stat_editor.msg_invalid_number"))
-            return
-        for key in keys:
-            base_val = _lv99_value(key)
-            values = entry["parameters"].setdefault(key, [])
-            for level in range(HIGH_TIER_START, final_level + 1):
-                values[level - 1] = _clamp(base_val + n * (level - LOW_TIER_END))
-        on_change()
-        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=final_level,
-                   method=t("stat_editor.label_increment") + f" {n} ({', '.join(keys)})"))
-        rebuild_grid()
 
     def apply_increment_random():
         keys = _selected_keys()
@@ -196,51 +178,58 @@ def _build_high_tier_tab(parent, entry, stat_keys, stat_label_keys, final_level,
             messagebox.showwarning(t("common.title_warning"), t("stat_editor.msg_no_stat_selected"))
             return
         try:
-            n = float(increment_random_n_entry.get().strip())
-            pct = float(increment_random_pct_entry.get().strip())
+            n = float(increment_n_entry.get().strip())
+            pct = max(0.0, float(increment_pct_entry.get().strip()))
         except ValueError:
             messagebox.showerror(t("common.title_error"), t("stat_editor.msg_invalid_number"))
             return
-        pct = max(0.0, pct)
         for key in keys:
-            base_val = _lv99_value(key)
+            base_val = _anchor_value(key)
             values = entry["parameters"].setdefault(key, [])
             current = float(base_val)
             low, high = n * (1 - pct / 100.0), n * (1 + pct / 100.0)
-            for level in range(HIGH_TIER_START, final_level + 1):
+            for level in range(range_start, range_end + 1):
                 current += random.uniform(low, high)
                 values[level - 1] = _clamp(round(current))
         on_change()
-        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=final_level,
+        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=range_end,
                    method=t("stat_editor.label_increment_random") + f" {n}±{pct}% ({', '.join(keys)})"))
         rebuild_grid()
 
-    def apply_target():
+    def apply_target_random():
+        # 기본 상승치는 "목표치까지 점진적 상승"과 동일하게 계산하되(레벨당 (목표-기준)/구간),
+        # 매 레벨 증분에 ± n% 난수를 얹어서 누적합니다. 그래서 최종(레벨상한 시점) 값은
+        # 목표치 부근에서 위아래로 흔들리며, 정확히 목표치에 맞춰지지 않을 수 있습니다
+        # (요청하신 의도 그대로: 최종 능력치가 목표값보다 크거나 작을 수 있음).
         keys = _selected_keys()
         if not keys:
             messagebox.showwarning(t("common.title_warning"), t("stat_editor.msg_no_stat_selected"))
             return
         try:
-            target = int(target_entry.get().strip())
+            target = int(target_random_entry.get().strip())
+            pct = max(0.0, float(target_random_pct_entry.get().strip()))
         except ValueError:
             messagebox.showerror(t("common.title_error"), t("stat_editor.msg_invalid_number"))
             return
-        span = final_level - LOW_TIER_END
+        span = range_end - anchor_level
         if span <= 0:
             return
         for key in keys:
-            base_val = _lv99_value(key)
+            base_val = _anchor_value(key)
+            step = (target - base_val) / span
+            variance = abs(step) * (pct / 100.0)
             values = entry["parameters"].setdefault(key, [])
-            for level in range(HIGH_TIER_START, final_level + 1):
-                fraction = (level - LOW_TIER_END) / span
-                values[level - 1] = _clamp(round(base_val + fraction * (target - base_val)))
+            current = float(base_val)
+            for level in range(range_start, range_end + 1):
+                current += step + random.uniform(-variance, variance)
+                values[level - 1] = _clamp(round(current))
         on_change()
-        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=final_level,
-                   method=t("stat_editor.label_target") + f" {target} ({', '.join(keys)})"))
+        log.info(t("stat_editor.log_batch_applied", name=entity_label, max=range_end,
+                   method=t("stat_editor.label_target_random") + f" {target}±{pct}% ({', '.join(keys)})"))
         rebuild_grid()
 
     row1 = ttk.Frame(control); row1.pack(fill="x", pady=2)
-    ttk.Button(row1, text=t("stat_editor.btn_fill_lv99"), command=apply_fill_lv99).pack(side="left")
+    ttk.Button(row1, text=t("stat_editor.btn_fill_anchor", level=anchor_level), command=apply_fill_anchor).pack(side="left")
 
     check_row = ttk.Frame(control); check_row.pack(fill="x", pady=(6, 2))
     ttk.Label(check_row, text=t("stat_editor.label_stat_checkboxes"), foreground=FG_DIM).pack(side="left", padx=(0, 8))
@@ -251,19 +240,17 @@ def _build_high_tier_tab(parent, entry, stat_keys, stat_label_keys, final_level,
         cb.pack(side="left", padx=4)
 
     row2 = ttk.Frame(control); row2.pack(fill="x", pady=2)
-    ttk.Label(row2, text=t("stat_editor.label_increment")).pack(side="left", padx=(0, 4))
-    increment_entry = ttk.Entry(row2, width=8); increment_entry.insert(0, "0"); increment_entry.pack(side="left", padx=(0, 4))
-    ttk.Button(row2, text=t("stat_editor.btn_apply"), command=apply_increment).pack(side="left")
+    ttk.Label(row2, text=t("stat_editor.label_increment_random")).pack(side="left", padx=(0, 4))
+    increment_n_entry = ttk.Entry(row2, width=8); increment_n_entry.insert(0, "0"); increment_n_entry.pack(side="left", padx=(0, 2))
+    ttk.Label(row2, text="±").pack(side="left")
+    increment_pct_entry = ttk.Entry(row2, width=6); increment_pct_entry.insert(0, "10"); increment_pct_entry.pack(side="left", padx=(2, 4))
+    ttk.Label(row2, text="%").pack(side="left", padx=(0, 4))
+    ttk.Button(row2, text=t("stat_editor.btn_apply"), command=apply_increment_random).pack(side="left")
 
     row3 = ttk.Frame(control); row3.pack(fill="x", pady=2)
-    ttk.Label(row3, text=t("stat_editor.label_increment_random")).pack(side="left", padx=(0, 4))
-    increment_random_n_entry = ttk.Entry(row3, width=8); increment_random_n_entry.insert(0, "0"); increment_random_n_entry.pack(side="left", padx=(0, 2))
+    ttk.Label(row3, text=t("stat_editor.label_target_random")).pack(side="left", padx=(0, 4))
+    target_random_entry = ttk.Entry(row3, width=8); target_random_entry.insert(0, "0"); target_random_entry.pack(side="left", padx=(0, 2))
     ttk.Label(row3, text="±").pack(side="left")
-    increment_random_pct_entry = ttk.Entry(row3, width=6); increment_random_pct_entry.insert(0, "10"); increment_random_pct_entry.pack(side="left", padx=(2, 4))
+    target_random_pct_entry = ttk.Entry(row3, width=6); target_random_pct_entry.insert(0, "10"); target_random_pct_entry.pack(side="left", padx=(2, 4))
     ttk.Label(row3, text="%").pack(side="left", padx=(0, 4))
-    ttk.Button(row3, text=t("stat_editor.btn_apply"), command=apply_increment_random).pack(side="left")
-
-    row4 = ttk.Frame(control); row4.pack(fill="x", pady=2)
-    ttk.Label(row4, text=t("stat_editor.label_target")).pack(side="left", padx=(0, 4))
-    target_entry = ttk.Entry(row4, width=8); target_entry.insert(0, "0"); target_entry.pack(side="left", padx=(0, 4))
-    ttk.Button(row4, text=t("stat_editor.btn_apply"), command=apply_target).pack(side="left")
+    ttk.Button(row3, text=t("stat_editor.btn_apply"), command=apply_target_random).pack(side="left")
