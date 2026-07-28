@@ -21,7 +21,6 @@
   "common.msg_id_must_be_number": "ID는 숫자로 입력해 주세요.",
   "common.msg_not_in_master_db": "⚠️ 알만툴 DB에 없음",
   "common.name_unknown": "이름 없음",
-
   "main.window_title": "EasyRPG DB Editor (Dynamic External Plugin Version)",
   "main.btn_change_project": "🗂 프로젝트(ldb) 변경",
   "main.project_label": "프로젝트: {title}   ({dir})",
@@ -30,7 +29,6 @@
   "main.log_label": "로그",
   "main.log_started": "EasyRPG DB Editor 시작",
   "main.msg_edb_synced": "순정 edb에서 개체 이름들을 실시간 동기화했습니다!",
-
   "config.msg_missing_lcf2xml": "- lcf2xml.exe  (위치: {dir})",
   "config.msg_missing_files": "다음 필수 파일을 찾을 수 없습니다:\n\n{list}\n\n프로그램 파일(py/exe)과 같은 폴더에 배치해 주세요.",
   "config.dialog_select_ldb_title": "RPG_RT.ldb 파일 선택",
@@ -47,7 +45,6 @@
   "config.log_backup_fail": "손상 파일 백업 실패: {reason}",
   "config.msg_save_fail": "설정 파일을 저장하지 못했습니다:\n{path}\n\n사유: {reason}",
   "config.log_save_fail": "설정 파일 저장 실패: {path} ({reason})",
-
   "lcf.msg_exe_not_found": "lcf2xml.exe 실행 파일을 찾을 수 없습니다.\n프로그램 폴더를 확인해 주세요.",
   "lcf.msg_convert_error": "lcf2xml 변환 중 오류가 발생했습니다. (종료 코드: {code})",
   "lcf.msg_unknown_error": "lcf2xml 실행 중 알 수 없는 오류가 발생했습니다.\n{reason}",
@@ -69,10 +66,8 @@
   "lcf.msg_patch_success": "전역 한계 해제 및 스킬/아이템 개조 패치가 완료되었습니다!\nRPG_RT.edb는 정리되었습니다. 다시 수정하려면 'edb로드'를 눌러주세요.",
   "lcf.log_patch_done": "패치 완료: RPG_RT.ldb 갱신됨",
   "lcf.log_tag_not_found": "'{tag}' 태그를 {node}에서 찾지 못해 새로 추가합니다 (필드명이 실제 EDB 태그명과 다를 수 있습니다 - 확인이 필요합니다).",
-
   "field.int_hint": "값 (-1 = 순정 기본):",
   "field.bool_checked_label": "사용함",
-
   "item_tab.title": "📦 [개별] 아이템 최대 소지량 조절",
   "item_tab.col_id": "ID",
   "item_tab.col_name": "아이템 이름",
@@ -94,7 +89,6 @@
   "item_tab.log_field_changed": "아이템 {id} - {field} = {value}",
   "item_tab.log_batch_done": "아이템 일괄 설정 완료: 최대 수량 = {value}",
   "item_tab.detail_header": "아이템 ID {id} - {name}",
-
   "skill_tab.title": "⚡ 스킬 세부 옵션 조절",
   "skill_tab.col_id": "ID",
   "skill_tab.col_name": "스킬 이름",
@@ -120,7 +114,6 @@
   "skill_tab.log_field_changed": "스킬 {id} - {field} = {value}",
   "skill_tab.log_reset_extra_done": "등록된 스킬 {count}개의 추가 옵션 초기화",
   "skill_tab.detail_header": "스킬 ID {id} - {name}",
-
   "system_tab.title": "⚙️ 시스템 상한 제한 조절",
   "system_tab.label_group_filter": "그룹:",
   "system_tab.group_all": "전체",
@@ -150,11 +143,9 @@
   "system_tab.btn_move_up": "▲ 위로",
   "system_tab.btn_move_down": "▼ 아래로",
   "system_tab.btn_apply": "✏️ 적용",
-
   "context_menu.move_up": "위로 이동",
   "context_menu.move_down": "아래로 이동",
   "context_menu.delete": "삭제",
-
   "actor_tab.title": "🧑 액터 세부 옵션 조절",
   "actor_tab.col_id": "ID",
   "actor_tab.col_name": "이름",
@@ -197,9 +188,7 @@
   "actor_tab.label_stat_defense": "Defense (방어력)",
   "actor_tab.label_stat_spirit": "Mind (정신력)",
   "actor_tab.label_stat_agility": "Agility (민첩성)",
-
   "common.btn_close": "닫기",
-
   "stat_editor.title": "{name} - 레벨별 능력치 편집",
   "stat_editor.notice": "Lv.1~99는 [Lv.1~99] 탭에서, Lv.100~레벨 상한({max})은 [Lv.100~N] 탭에서 각각 편집할 수 있습니다.",
   "stat_editor.no_levels": "편집할 레벨이 없습니다.",
@@ -214,14 +203,12 @@
   "stat_editor.label_target_random": "목표치까지 점진적 상승 ± n% 난수:",
   "stat_editor.btn_apply": "적용",
   "stat_editor.log_batch_applied": "{name} - Lv.~{max} 능력치 일괄 적용: {method}",
-
   "stat_label.maxhp": "MaxHP (최대 HP)",
   "stat_label.maxsp": "MaxSP (최대 SP)",
   "stat_label.attack": "Attack (공격력)",
   "stat_label.defense": "Defense (방어력)",
   "stat_label.spirit": "Mind (정신력)",
   "stat_label.agility": "Agility (민첩성)",
-
   "class_tab.title": "🎓 클래스 세부 옵션 조절",
   "class_tab.col_id": "ID",
   "class_tab.col_name": "클래스 이름",
@@ -238,12 +225,10 @@
   "class_tab.log_field_changed": "클래스 {id} - {field} = {value}",
   "class_tab.detail_header": "클래스 ID {id} - {name}",
   "class_tab.group_level": "경험치",
-
   "type_label.int": "정수",
   "type_label.bool": "체크박스",
   "type_label.enum": "콤보박스",
   "type_label.list": "체크+순서",
-
   "item_type.0": "일반",
   "item_type.1": "무기",
   "item_type.2": "방패",
@@ -254,5 +239,24 @@
   "item_type.7": "스킬북",
   "item_type.8": "씨앗",
   "item_type.9": "특수",
-  "item_type.10": "스위치"
+  "item_type.10": "스위치",
+  "enemy_tab.title": "👹 적 세부 옵션 조절",
+  "enemy_tab.col_id": "ID",
+  "enemy_tab.col_name": "적 이름",
+  "enemy_tab.label_id": "적 ID:",
+  "enemy_tab.btn_reset_extra": "↩️ 추가 옵션 초기화",
+  "enemy_tab.placeholder": "왼쪽 목록에서 적을 선택하거나, ID/이름 검색으로\n적을 지정하면 편집 패널이 바로 열립니다.",
+  "enemy_tab.msg_confirm_add_unknown": "순정 적 데이터에 없습니다. 목록에 추가하고 편집할까요?",
+  "enemy_tab.msg_no_enemies": "리스트에 등록된 적이 없습니다.",
+  "enemy_tab.title_confirm_clear": "일괄 삭제",
+  "enemy_tab.msg_confirm_clear": "등록된 모든 적 규칙을 삭제하시겠습니까?",
+  "enemy_tab.title_confirm_reset_extra": "추가 옵션 초기화",
+  "enemy_tab.msg_confirm_reset_extra": "등록된 모든 적의 기본 스테이터스(HP/SP/공격력/방어력/정신력/민첩성)를 제외한\n나머지 EasyRPG 옵션을 기본값으로 초기화하시겠습니까?",
+  "enemy_tab.msg_reset_extra_done": "등록된 적 {count}개의 추가 옵션을 초기화했습니다.",
+  "enemy_tab.log_added": "적 목록에 추가 (ID {id})",
+  "enemy_tab.log_deleted": "적 목록에서 삭제 (ID {id})",
+  "enemy_tab.log_cleared": "적 목록 전체 삭제",
+  "enemy_tab.log_field_changed": "적 {id} - {field} = {value}",
+  "enemy_tab.log_reset_extra_done": "등록된 적 {count}개의 추가 옵션 초기화",
+  "enemy_tab.detail_header": "적 ID {id} - {name}"
 }

@@ -17,6 +17,7 @@ from core.skill_schema import SKILL_FIELD_DEFS
 from core.item_schema import ITEM_FIELD_DEFS
 from core.actor_schema import ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS
 from core.class_schema import CLASS_FIELD_DEFS
+from core.enemy_schema import ENEMY_FIELD_DEFS
 
 
 def run_lcf2xml(cfg, target_file):
@@ -37,28 +38,30 @@ def run_lcf2xml(cfg, target_file):
 
 
 def decompile_and_parse_edb_directly(cfg):
-    """RPG_RT.ldb -> RPG_RT.edb 로 역변환하고, 아이템/스킬/액터/클래스 마스터 정보를 파싱합니다.
+    """RPG_RT.ldb -> RPG_RT.edb 로 역변환하고, 아이템/스킬/액터/클래스/적 마스터 정보를 파싱합니다.
     반환값: (edb_master_items, edb_master_item_types, edb_master_skills,
              edb_master_skill_stats, edb_master_actors, edb_master_actor_data,
-             edb_master_classes, edb_master_class_data)
+             edb_master_classes, edb_master_class_data,
+             edb_master_enemies, edb_master_enemy_stats)
     실패 시 전부 None"""
     if not os.path.exists(cfg.ldb_file):
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None
 
     log.info(t("lcf.log_converting"))
     if not run_lcf2xml(cfg, cfg.ldb_file):
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None
     if not os.path.exists(cfg.edb_file):
         messagebox.showerror(
             t("common.title_fail"),
             t("lcf.msg_edb_not_created")
         )
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None
 
     log.info(t("lcf.log_parsing"))
     edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats = {}, {}, {}, {}
     edb_master_actors, edb_master_actor_data = {}, {}
     edb_master_classes, edb_master_class_data = {}, {}
+    edb_master_enemies, edb_master_enemy_stats = {}, {}
     try:
         with open(cfg.edb_file, "r", encoding="utf-8") as f:
             xml_text = f.read()
@@ -144,13 +147,27 @@ def decompile_and_parse_edb_directly(cfg):
             data["parameters"] = parameters
             edb_master_class_data[cid] = data
 
+        enemy_block_pattern = re.compile(r'<Enemy\s+id="0*(\d+)">(.*?)</Enemy>', re.DOTALL | re.IGNORECASE)
+        for match in enemy_block_pattern.finditer(xml_text):
+            eid, block = int(match.group(1)), match.group(2)
+            name_m = re.search(r'<name>(.*?)</name>', block, re.DOTALL | re.IGNORECASE)
+            edb_master_enemies[eid] = name_m.group(1) if name_m and name_m.group(1) else t("common.name_unknown")
+
+            stats = {}
+            for tag in ("max_hp", "max_sp", "attack", "defense", "spirit", "agility"):
+                m = re.search(rf'<{tag}>(.*?)</{tag}>', block, re.DOTALL | re.IGNORECASE)
+                if m and m.group(1).strip().lstrip("-").isdigit():
+                    stats[tag] = int(m.group(1).strip())
+            edb_master_enemy_stats[eid] = stats
+
         log.info(t("lcf.log_sync_done", item_count=len(edb_master_items), skill_count=len(edb_master_skills)))
         return (edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats,
-                edb_master_actors, edb_master_actor_data, edb_master_classes, edb_master_class_data)
+                edb_master_actors, edb_master_actor_data, edb_master_classes, edb_master_class_data,
+                edb_master_enemies, edb_master_enemy_stats)
     except Exception as e:
         log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
         messagebox.showerror(t("common.title_fail"), t("lcf.msg_parse_error", reason=e))
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None
 
 
 def apply_final_patch(cfg):
@@ -237,6 +254,26 @@ def apply_final_patch(cfg):
                                 else:
                                     log.warning(t("lcf.log_tag_not_found", tag=name, node=f"Skill {sk['id']}"))
                                     ET.SubElement(skill_node, name).text = text_val
+            if t_low == "enemies" or t_low == "enemy_container":
+                for en in cfg.current_config.get("enemies", []):
+                    for enemy_node in el.findall("Enemy") + el.findall("enemy"):
+                        nid = enemy_node.get("id") or (enemy_node.find("id").text if enemy_node.find("id") is not None else None)
+                        if nid and int(nid) == en["id"]:
+                            fields = en.get("fields", {})
+                            for fd in ENEMY_FIELD_DEFS:
+                                name = fd["name"]
+                                if name not in fields:
+                                    continue
+                                val = fields[name]
+                                if fd.get("skip_if_empty") and not val:
+                                    continue
+                                text_val = "T" if (fd.get("type") == "bool" and val) else ("F" if fd.get("type") == "bool" else str(val))
+                                tag = enemy_node.find(name)
+                                if tag is not None:
+                                    tag.text = text_val
+                                else:
+                                    log.warning(t("lcf.log_tag_not_found", tag=name, node=f"Enemy {en['id']}"))
+                                    ET.SubElement(enemy_node, name).text = text_val
             if t_low == "actors":
                 for ac in cfg.current_config.get("actors", []):
                     for actor_node in el.findall("Actor"):
