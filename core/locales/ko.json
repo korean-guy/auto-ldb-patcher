@@ -258,5 +258,11 @@
   "enemy_tab.log_cleared": "적 목록 전체 삭제",
   "enemy_tab.log_field_changed": "적 {id} - {field} = {value}",
   "enemy_tab.log_reset_extra_done": "등록된 적 {count}개의 추가 옵션 초기화",
-  "enemy_tab.detail_header": "적 ID {id} - {name}"
+  "enemy_tab.detail_header": "적 ID {id} - {name}",
+  "enemy_tab.col_max_hp": "최대 체력",
+  "enemy_tab.col_max_sp": "최대 마력",
+  "enemy_tab.col_attack": "공격력",
+  "enemy_tab.col_defense": "방어력",
+  "enemy_tab.col_spirit": "정신력",
+  "enemy_tab.col_agility": "민첩성"
 }

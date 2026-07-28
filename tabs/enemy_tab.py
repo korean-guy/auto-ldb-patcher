@@ -57,17 +57,29 @@ class EnemyTab:
         left_frame = ttk.Frame(enemy_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
-        columns = ("ID", "이름")
+        columns = ("ID", "이름", "최대체력", "최대마력", "공격력", "방어력", "정신력", "민첩성")
         self.enemy_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=18)
-        headings = [("ID", t("enemy_tab.col_id")), ("이름", t("enemy_tab.col_name"))]
+        headings = [
+            ("ID", t("enemy_tab.col_id")), ("이름", t("enemy_tab.col_name")),
+            ("최대체력", t("enemy_tab.col_max_hp")), ("최대마력", t("enemy_tab.col_max_sp")),
+            ("공격력", t("enemy_tab.col_attack")), ("방어력", t("enemy_tab.col_defense")),
+            ("정신력", t("enemy_tab.col_spirit")), ("민첩성", t("enemy_tab.col_agility")),
+        ]
         for col, txt in headings: self.enemy_tree.heading(col, text=txt)
         attach_tree_scrollbar(self.enemy_tree, left_frame)
         self.enemy_tree.pack(fill="both", expand=True, side="left")
 
-        self.enemy_tree.column("ID", width=60, anchor="center")
-        self.enemy_tree.column("이름", width=280, anchor="w")
+        self.enemy_tree.column("ID", width=50, anchor="center")
+        self.enemy_tree.column("이름", width=160, anchor="w")
+        self.enemy_tree.column("최대체력", width=80, anchor="center")
+        self.enemy_tree.column("최대마력", width=80, anchor="center")
+        self.enemy_tree.column("공격력", width=70, anchor="center")
+        self.enemy_tree.column("방어력", width=70, anchor="center")
+        self.enemy_tree.column("정신력", width=70, anchor="center")
+        self.enemy_tree.column("민첩성", width=70, anchor="center")
         self.enemy_tree.bind("<<TreeviewSelect>>", self.on_enemy_select)
-        enable_column_sort(self.enemy_tree, columns, numeric_columns=("ID",))
+        enable_column_sort(self.enemy_tree, columns,
+                            numeric_columns=("ID", "최대체력", "최대마력", "공격력", "방어력", "정신력", "민첩성"))
         enable_column_width_persistence(self.enemy_tree, self.cfg, "enemy_tree")
         attach_row_context_menu(self.enemy_tree, lambda: self.move_enemy(-1), lambda: self.move_enemy(1), self.delete_enemy_rule)
 
@@ -121,8 +133,14 @@ class EnemyTab:
         for item in self.enemy_tree.get_children(): self.enemy_tree.delete(item)
         for en in self.cfg.current_config.get("enemies", []):
             eid = en["id"]
-            name = en.get("fields", {}).get("name") or self.app.edb_master_enemies.get(eid) or t("common.msg_not_in_master_db")
-            self.enemy_tree.insert("", "end", iid=str(eid), values=(eid, name))
+            fields = en.get("fields", {})
+            name = fields.get("name") or self.app.edb_master_enemies.get(eid) or t("common.msg_not_in_master_db")
+            self.enemy_tree.insert("", "end", iid=str(eid), values=(
+                eid, name,
+                fields.get("max_hp", 0), fields.get("max_sp", 0),
+                fields.get("attack", 0), fields.get("defense", 0),
+                fields.get("spirit", 0), fields.get("agility", 0),
+            ))
 
         if prev_iid and self.enemy_tree.exists(prev_iid):
             self.enemy_tree.selection_set(prev_iid)

@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.utils import get_program_dir
 from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme
+from core.tab_bar import WrappingNotebook
 from core.config import ConfigManager
 from core.logger import log
 from core.i18n import t
@@ -151,7 +152,7 @@ class App:
         self.body_container = ttk.Frame(self.root)
         self.body_container.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
-        self.notebook = ttk.Notebook(self.body_container)
+        self.notebook = WrappingNotebook(self.body_container)
         self.notebook.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         # 탭 로드 (TAB_CLASSES 목록 순서대로)
