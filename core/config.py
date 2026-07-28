@@ -301,7 +301,7 @@ class ConfigManager:
         def factory():
             return {
                 "system_limits": copy.deepcopy(self.common_config.get("system_limits", DEFAULT_SYSTEM_DEFS)),
-                "items": [], "skills": [], "actors": [], "classes": [], "enemies": [],
+                "items": [], "skills": [], "actors": [], "classes": [], "enemies": [], "terrains": [],
             }
 
         self.current_config = read_json_safe(self.project_config_file, factory)
@@ -311,6 +311,7 @@ class ConfigManager:
         if "actors" not in self.current_config: self.current_config["actors"] = []
         if "classes" not in self.current_config: self.current_config["classes"] = []
         if "enemies" not in self.current_config: self.current_config["enemies"] = []
+        if "terrains" not in self.current_config: self.current_config["terrains"] = []
 
         migrated = migrate_system_limits(self.current_config.get("system_limits", {}))
         merged = merge_system_defs(migrated, self.common_config.get("system_limits", DEFAULT_SYSTEM_DEFS))

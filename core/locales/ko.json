@@ -264,5 +264,19 @@
   "enemy_tab.col_attack": "공격력",
   "enemy_tab.col_defense": "방어력",
   "enemy_tab.col_spirit": "정신력",
-  "enemy_tab.col_agility": "민첩성"
+  "enemy_tab.col_agility": "민첩성",
+  "terrain_tab.title": "🗺️ 지형 데미지 옵션 조절",
+  "terrain_tab.col_id": "ID",
+  "terrain_tab.col_name": "지형 이름",
+  "terrain_tab.label_id": "지형 ID:",
+  "terrain_tab.placeholder": "왼쪽 목록에서 지형을 선택하거나, ID/이름 검색으로\n지형을 지정하면 편집 패널이 바로 열립니다.",
+  "terrain_tab.msg_confirm_add_unknown": "순정 지형 데이터에 없습니다. 목록에 추가하고 편집할까요?",
+  "terrain_tab.msg_no_terrains": "리스트에 등록된 지형이 없습니다.",
+  "terrain_tab.title_confirm_clear": "일괄 삭제",
+  "terrain_tab.msg_confirm_clear": "등록된 모든 지형 규칙을 삭제하시겠습니까?",
+  "terrain_tab.log_added": "지형 목록에 추가 (ID {id})",
+  "terrain_tab.log_deleted": "지형 목록에서 삭제 (ID {id})",
+  "terrain_tab.log_cleared": "지형 목록 전체 삭제",
+  "terrain_tab.log_field_changed": "지형 {id} - {field} = {value}",
+  "terrain_tab.detail_header": "지형 ID {id} - {name}"
 }
