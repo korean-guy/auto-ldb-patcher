@@ -326,3 +326,60 @@ class ConfigManager:
 
     def find_sys_def(self, name):
         return self.current_config.get("system_limits", {}).get(name)
+
+    # ---- 설정 불러오기: 다른 프로젝트(예: 이전 버전)의 값을 현재 프로젝트에 덮어쓰기 ----
+    def list_other_projects(self):
+        """projects_dir 아래의 다른 프로젝트 폴더들(현재 프로젝트 제외) 중 config.json이
+        있는 것만 골라 반환합니다. [{"folder": 폴더명, "path": config.json 경로}, ...]
+        게임을 버전업할 때(예: v1 -> v2) 예전 폴더의 설정을 새 폴더로 옮겨오는 용도입니다."""
+        results = []
+        if not os.path.isdir(self.projects_dir):
+            return results
+        current_folder = os.path.basename(self.project_dir) if self.project_dir else None
+        for name in sorted(os.listdir(self.projects_dir)):
+            if name == current_folder:
+                continue
+            folder_path = os.path.join(self.projects_dir, name)
+            if not os.path.isdir(folder_path):
+                continue
+            config_path = os.path.join(folder_path, "config.json")
+            if os.path.exists(config_path):
+                results.append({"folder": name, "path": config_path})
+        return results
+
+    def import_settings_from(self, source_config_path):
+        """다른 프로젝트의 config.json에서 아이템/스킬/액터/클래스/적/지형 설정 목록과
+        시스템 옵션의 값(value)만 읽어와 현재 프로젝트에 덮어씁니다. 시스템 옵션은 현재
+        프로젝트에 이미 존재하는 키에 한해서만 값을 옮기고(name/description/options 등
+        나머지 메타데이터는 현재 스키마 것을 그대로 유지), 옮긴 뒤 곧바로 저장합니다.
+        성공하면 {키: 옮겨진 개수} 형태의 요약 dict를, 파일을 읽지 못하면 None을 반환합니다."""
+        try:
+            with open(source_config_path, "r", encoding="utf-8") as f:
+                source = json.load(f)
+        except Exception as e:
+            log.error(t("config.log_import_read_fail", path=source_config_path, reason=e))
+            messagebox.showerror(t("common.title_fail"), t("config.msg_import_read_fail", reason=e))
+            return None
+
+        summary = {}
+        for key in ("items", "skills", "actors", "classes", "enemies", "terrains"):
+            values = source.get(key)
+            if isinstance(values, list):
+                self.current_config[key] = copy.deepcopy(values)
+                summary[key] = len(values)
+
+        src_limits = source.get("system_limits", {})
+        if isinstance(src_limits, dict):
+            cur_limits = self.current_config.setdefault("system_limits", {})
+            applied = 0
+            for name, src_defn in src_limits.items():
+                cur_defn = cur_limits.get(name)
+                if isinstance(cur_defn, dict) and isinstance(src_defn, dict) and "value" in src_defn:
+                    cur_defn["value"] = copy.deepcopy(src_defn["value"])
+                    applied += 1
+            fix_invalid_variable_bounds(cur_limits)
+            summary["system_limits"] = applied
+
+        self.save_config()
+        log.info(t("config.log_import_done", path=source_config_path, summary=summary))
+        return summary

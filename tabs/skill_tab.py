@@ -27,6 +27,12 @@ from core.skill_schema import SKILL_FIELD_DEFS, default_skill_fields, migrate_sk
 from core.logger import log
 from core.i18n import t
 
+# enabled_when으로 다른 필드의 활성/비활성 여부를 좌우하는 "제어" 필드 이름들.
+# 이 필드가 바뀔 때만 패널을 다시 그려서 활성/비활성 상태를 갱신하면 됩니다 -
+# 나머지 대다수 필드는 값만 저장하고 다시 그리지 않아, 수정할 때마다 스크롤이
+# 맨 위로 돌아가거나 다른 입력칸 선택이 지연되는 문제가 생기지 않습니다.
+SKILL_CONTROLLING_FIELD_NAMES = {fd["enabled_when"]["field"] for fd in SKILL_FIELD_DEFS if fd.get("enabled_when")}
+
 # 기본 위력/공격력 비율/정신력 비율은 edb에 이미 존재하는 실제 수치를 기본값으로 사용합니다.
 STAT_FIELDS_FROM_EDB = ("power", "physical_rate", "magical_rate")
 
@@ -142,25 +148,40 @@ class SkillTab:
         ttk.Label(self.skill_detail_frame, text=t("skill_tab.placeholder"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=8)
 
+    def reset_detail_panel(self):
+        """외부(설정 불러오기 등)에서 데이터 전체가 교체됐을 때, 화면에 예전 값이
+        남아있지 않도록 편집 패널을 비웁니다."""
+        self._current_skill = None
+        self._show_placeholder()
+
     # ------------------------------------------------------------------
     def refresh(self):
         selected = self.skill_tree.selection()
         prev_iid = selected[0] if selected else None
 
-        for item in self.skill_tree.get_children(): self.skill_tree.delete(item)
-        for sk in self.cfg.current_config.get("skills", []):
-            sid = sk["id"]
-            name = sk.get("fields", {}).get("name") or self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
-            fields = sk.get("fields", {})
-            rating = fields.get("power", 0)
-            phys = fields.get("physical_rate", 0)
-            mag = fields.get("magical_rate", 0)
-            crit = fields.get("easyrpg_critical_hit_chance", 0)
-            self.skill_tree.insert("", "end", iid=str(sid), values=(sid, name, rating, phys, mag, crit))
+        self._suppress_tree_select = True
+        try:
+            for item in self.skill_tree.get_children(): self.skill_tree.delete(item)
+            for sk in self.cfg.current_config.get("skills", []):
+                sid = sk["id"]
+                name = sk.get("fields", {}).get("name") or self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
+                fields = sk.get("fields", {})
+                rating = fields.get("power", 0)
+                phys = fields.get("physical_rate", 0)
+                mag = fields.get("magical_rate", 0)
+                crit = fields.get("easyrpg_critical_hit_chance", 0)
+                self.skill_tree.insert("", "end", iid=str(sid), values=(sid, name, rating, phys, mag, crit))
 
-        if prev_iid and self.skill_tree.exists(prev_iid):
-            self.skill_tree.selection_set(prev_iid)
-            self.skill_tree.see(prev_iid)
+            if prev_iid and self.skill_tree.exists(prev_iid):
+                self.skill_tree.selection_set(prev_iid)
+                self.skill_tree.see(prev_iid)
+        finally:
+            # selection_set()이 만드는 <<TreeviewSelect>> 이벤트는 즉시가 아니라
+            # Tk 이벤트 큐에 쌓였다가 다음 idle 처리 때 발생합니다. 여기서 바로
+            # 플래그를 False로 되돌리면 그 지연된 이벤트가 나중에 도착했을 때
+            # 억제되지 못하고 on_*_select가 다시 실행돼(상세 패널 재생성) 버리므로,
+            # 이번 이벤트 루프 한 바퀴가 다 돈 뒤(after_idle)에 해제합니다.
+            self.skill_tree.after_idle(lambda: setattr(self, "_suppress_tree_select", False))
 
     # ------------------------------------------------------------------
     def _update_selected_name_label(self, iid_text):
@@ -189,6 +210,8 @@ class SkillTab:
     # 좌측 목록 선택 -> 우측 속성 편집기 렌더링
     # ------------------------------------------------------------------
     def on_skill_select(self, event):
+        if getattr(self, "_suppress_tree_select", False):
+            return
         selected = self.skill_tree.selection()
         if not selected: return
         sid = int(selected[0])
@@ -272,9 +295,10 @@ class SkillTab:
             self.cfg.save_config()
             self.app.refresh_all_tabs()
             log.info(t("skill_tab.log_field_changed", id=self._current_skill["id"], field=field_name, value=new_val))
-            # 위젯을 그리던 이벤트(FocusOut 등) 처리가 끝난 뒤 안전하게 다시 그림
-            # (예: HP 소모 방식이 바뀌면 관련 필드의 활성/비활성 상태를 새로 계산)
-            self.skill_detail_frame.after_idle(lambda: self.render_skill_detail(self._current_skill))
+            if field_name in SKILL_CONTROLLING_FIELD_NAMES:
+                # 예: HP 소모 방식이 바뀌면 관련 필드(HP 소모량/비율)의 활성/비활성 상태를
+                # 새로 계산해야 하므로, 이 경우에만 위젯을 다시 그립니다.
+                self.skill_detail_frame.after_idle(lambda: self.render_skill_detail(self._current_skill))
         return _on_change
 
     # ------------------------------------------------------------------

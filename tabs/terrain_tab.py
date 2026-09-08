@@ -103,20 +103,35 @@ class TerrainTab:
         ttk.Label(self.terrain_detail_frame, text=t("terrain_tab.placeholder"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=8)
 
+    def reset_detail_panel(self):
+        """외부(설정 불러오기 등)에서 데이터 전체가 교체됐을 때, 화면에 예전 값이
+        남아있지 않도록 편집 패널을 비웁니다."""
+        self._current_terrain = None
+        self._show_placeholder()
+
     # ------------------------------------------------------------------
     def refresh(self):
         selected = self.terrain_tree.selection()
         prev_iid = selected[0] if selected else None
 
-        for item in self.terrain_tree.get_children(): self.terrain_tree.delete(item)
-        for tr in self.cfg.current_config.get("terrains", []):
-            tid = tr["id"]
-            name = self.app.edb_master_terrains.get(tid) or t("common.msg_not_in_master_db")
-            self.terrain_tree.insert("", "end", iid=str(tid), values=(tid, name))
+        self._suppress_tree_select = True
+        try:
+            for item in self.terrain_tree.get_children(): self.terrain_tree.delete(item)
+            for tr in self.cfg.current_config.get("terrains", []):
+                tid = tr["id"]
+                name = self.app.edb_master_terrains.get(tid) or t("common.msg_not_in_master_db")
+                self.terrain_tree.insert("", "end", iid=str(tid), values=(tid, name))
 
-        if prev_iid and self.terrain_tree.exists(prev_iid):
-            self.terrain_tree.selection_set(prev_iid)
-            self.terrain_tree.see(prev_iid)
+            if prev_iid and self.terrain_tree.exists(prev_iid):
+                self.terrain_tree.selection_set(prev_iid)
+                self.terrain_tree.see(prev_iid)
+        finally:
+            # selection_set()이 만드는 <<TreeviewSelect>> 이벤트는 즉시가 아니라
+            # Tk 이벤트 큐에 쌓였다가 다음 idle 처리 때 발생합니다. 여기서 바로
+            # 플래그를 False로 되돌리면 그 지연된 이벤트가 나중에 도착했을 때
+            # 억제되지 못하고 on_*_select가 다시 실행돼(상세 패널 재생성) 버리므로,
+            # 이번 이벤트 루프 한 바퀴가 다 돈 뒤(after_idle)에 해제합니다.
+            self.terrain_tree.after_idle(lambda: setattr(self, "_suppress_tree_select", False))
 
     # ------------------------------------------------------------------
     def _update_selected_name_label(self, iid_text):
@@ -142,6 +157,8 @@ class TerrainTab:
         self.open_editor_for_id(iid)
 
     def on_terrain_select(self, event):
+        if getattr(self, "_suppress_tree_select", False):
+            return
         selected = self.terrain_tree.selection()
         if not selected: return
         iid = int(selected[0])
@@ -207,7 +224,6 @@ class TerrainTab:
             self.cfg.save_config()
             self.app.refresh_all_tabs()
             log.info(t("terrain_tab.log_field_changed", id=self._current_terrain["id"], field=field_name, value=new_val))
-            self.terrain_detail_frame.after_idle(lambda: self.render_terrain_detail(self._current_terrain))
         return _on_change
 
     # ------------------------------------------------------------------

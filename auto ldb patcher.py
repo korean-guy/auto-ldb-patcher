@@ -24,7 +24,7 @@ from tkinter import ttk, messagebox
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.utils import get_program_dir
-from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme
+from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme, make_listbox_with_scroll
 from core.tab_bar import WrappingNotebook
 from core.config import ConfigManager
 from core.logger import log
@@ -138,6 +138,65 @@ class App:
         if lcf.apply_final_patch(self.cfg):
             self.refresh_edb_overlay()
 
+    def reset_all_tab_details(self):
+        """탭들이 열어두고 있던 편집 패널을 전부 비웁니다 (다른 프로젝트에서 설정을
+        통째로 불러온 직후처럼, 화면에 예전 항목의 값이 남아있으면 안 되는 경우)."""
+        for tab in self.tabs:
+            hook = getattr(tab, "reset_detail_panel", None)
+            if callable(hook):
+                hook()
+
+    def open_import_settings_dialog(self):
+        """게임을 버전업 할 때마다(예: projects의 v1 -> v2) 아이템/스킬/액터/클래스/적/
+        지형/시스템 설정을 처음부터 다시 입력하지 않도록, 다른 프로젝트 폴더에 저장된
+        값을 골라서 현재 프로젝트에 통째로 불러오는 창을 띄웁니다."""
+        projects = self.cfg.list_other_projects()
+        if not projects:
+            messagebox.showinfo(t("main.dialog_import_title"), t("main.msg_import_no_projects"))
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(t("main.dialog_import_title"))
+        dialog.configure(bg=BG)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        ttk.Label(dialog, text=t("main.label_import_pick"), justify="left").pack(
+            anchor="w", padx=14, pady=(14, 8)
+        )
+
+        list_frame, listbox = make_listbox_with_scroll(dialog, height=10)
+        list_frame.pack(fill="both", expand=True, padx=14)
+        for proj in projects:
+            listbox.insert(tk.END, proj["folder"])
+        listbox.selection_set(0)
+
+        btn_row = ttk.Frame(dialog)
+        btn_row.pack(fill="x", padx=14, pady=14)
+
+        def do_import():
+            sel = listbox.curselection()
+            if not sel:
+                return
+            proj = projects[sel[0]]
+            if not messagebox.askyesno(
+                t("main.title_import_confirm"),
+                t("main.msg_import_confirm", folder=proj["folder"]),
+                parent=dialog,
+            ):
+                return
+            summary = self.cfg.import_settings_from(proj["path"])
+            if summary is None:
+                return
+            self.reset_all_tab_details()
+            self.refresh_all_tabs()
+            dialog.destroy()
+            messagebox.showinfo(t("common.title_done"), t("main.msg_import_done", folder=proj["folder"]))
+
+        ttk.Button(btn_row, text=t("common.btn_ok"), command=do_import).pack(side="right", padx=(6, 0))
+        ttk.Button(btn_row, text=t("common.btn_cancel"), command=dialog.destroy).pack(side="right")
+
     # ------------------------------------------------------------------
     # UI 구성
     # ------------------------------------------------------------------
@@ -146,6 +205,7 @@ class App:
         top_frame.pack(fill="x")
         ttk.Button(top_frame, text=t("common.btn_reload_edb"), command=self.refresh_from_edb).pack(side="left", padx=5)
         ttk.Button(top_frame, text=t("main.btn_change_project"), command=self.change_project_file).pack(side="left", padx=5)
+        ttk.Button(top_frame, text=t("main.btn_import_settings"), command=self.open_import_settings_dialog).pack(side="left", padx=5)
         self.project_label = ttk.Label(
             top_frame, text=t("main.project_label", title=self.cfg.project_title, dir=self.cfg.game_dir), foreground=FG_DIM
         )

@@ -107,24 +107,42 @@ class ItemTab:
         ttk.Label(self.item_detail_frame, text=t("item_tab.placeholder"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=8)
 
+    def reset_detail_panel(self):
+        """외부(설정 불러오기 등)에서 데이터 전체가 교체됐을 때, 화면에 예전 값이
+        남아있지 않도록 편집 패널을 비웁니다."""
+        self._current_item = None
+        self._show_placeholder()
+
     # ------------------------------------------------------------------
     def refresh(self):
         selected = self.item_tree.selection()
         prev_iid = selected[0] if selected else None
 
-        for item in self.item_tree.get_children(): self.item_tree.delete(item)
-        for it in self.cfg.current_config.get("items", []):
-            iid = it["id"]
-            name = it.get("fields", {}).get("name") or self.app.edb_master_items.get(iid) or t("common.msg_not_in_master_db")
-            type_code = self.app.edb_master_item_types.get(iid)
-            type_name = t(f"item_type.{type_code}") if type_code is not None else "-"
-            max_count = it.get("fields", {}).get("easyrpg_max_count", -1)
-            display_count = max_count if max_count != -1 else t("item_tab.max_count_default_display")
-            self.item_tree.insert("", "end", iid=str(iid), values=(iid, name, type_name, display_count))
+        # 데이터 갱신 후 이전 선택을 복원하는 과정에서 <<TreeviewSelect>>가 다시 발생해
+        # 편집 중이던 상세 패널이 통째로 다시 그려지며 스크롤이 맨 위로 리셋되는 문제를
+        # 막기 위해, 이 구간 동안은 on_item_select가 아무 것도 하지 않도록 억제합니다.
+        self._suppress_tree_select = True
+        try:
+            for item in self.item_tree.get_children(): self.item_tree.delete(item)
+            for it in self.cfg.current_config.get("items", []):
+                iid = it["id"]
+                name = it.get("fields", {}).get("name") or self.app.edb_master_items.get(iid) or t("common.msg_not_in_master_db")
+                type_code = self.app.edb_master_item_types.get(iid)
+                type_name = t(f"item_type.{type_code}") if type_code is not None else "-"
+                max_count = it.get("fields", {}).get("easyrpg_max_count", -1)
+                display_count = max_count if max_count != -1 else t("item_tab.max_count_default_display")
+                self.item_tree.insert("", "end", iid=str(iid), values=(iid, name, type_name, display_count))
 
-        if prev_iid and self.item_tree.exists(prev_iid):
-            self.item_tree.selection_set(prev_iid)
-            self.item_tree.see(prev_iid)
+            if prev_iid and self.item_tree.exists(prev_iid):
+                self.item_tree.selection_set(prev_iid)
+                self.item_tree.see(prev_iid)
+        finally:
+            # selection_set()이 만드는 <<TreeviewSelect>> 이벤트는 즉시가 아니라
+            # Tk 이벤트 큐에 쌓였다가 다음 idle 처리 때 발생합니다. 여기서 바로
+            # 플래그를 False로 되돌리면 그 지연된 이벤트가 나중에 도착했을 때
+            # 억제되지 못하고 on_*_select가 다시 실행돼(상세 패널 재생성) 버리므로,
+            # 이번 이벤트 루프 한 바퀴가 다 돈 뒤(after_idle)에 해제합니다.
+            self.item_tree.after_idle(lambda: setattr(self, "_suppress_tree_select", False))
 
     # ------------------------------------------------------------------
     def _update_selected_name_label(self, iid_text):
@@ -150,6 +168,8 @@ class ItemTab:
         self.open_editor_for_id(iid)
 
     def on_item_select(self, event):
+        if getattr(self, "_suppress_tree_select", False):
+            return
         selected = self.item_tree.selection()
         if not selected: return
         iid = int(selected[0])
@@ -216,7 +236,6 @@ class ItemTab:
             self.cfg.save_config()
             self.app.refresh_all_tabs()
             log.info(t("item_tab.log_field_changed", id=self._current_item["id"], field=field_name, value=new_val))
-            self.item_detail_frame.after_idle(lambda: self.render_item_detail(self._current_item))
         return _on_change
 
     # ------------------------------------------------------------------
