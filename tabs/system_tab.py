@@ -111,14 +111,22 @@ class SystemTab:
 
         for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
         active_group = self.group_filter_var.get()
+
+        entries = []
         for key, defn in self.cfg.current_config.get("system_limits", {}).items():
-            if key == "easyrpg_max_item_count":
-                continue
             group = defn.get("group", "일반")
             if active_group != t("system_tab.group_all") and group != active_group:
                 continue
+            display_name = t_field("sys", key, "name", defn.get("name", key))
+            entries.append((group, display_name, key, defn))
+        # 기본 정렬: 1차 그룹 오름차순 - 2차 옵션명(표시 이름) 오름차순
+        # (컬럼 헤더를 클릭하면 core.theme.enable_column_sort가 별도로 그때그때 정렬해줌 -
+        # 이건 어떤 정렬도 적용되지 않은 "처음 열었을 때"의 기본 순서입니다.)
+        entries.sort(key=lambda e: (e[0], e[1]))
+
+        for group, display_name, key, defn in entries:
             self.sys_tree.insert("", "end", iid=key, values=(
-                t_field("sys", key, "name", defn.get("name", key)), group,
+                display_name, group,
                 TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
                 self.format_sys_max(defn),
@@ -283,8 +291,6 @@ class SystemTab:
     def reset_sys_limits(self):
         if not messagebox.askyesno(t("system_tab.title_confirm_reset"), t("system_tab.msg_confirm_reset")): return
         for key, defn in self.cfg.current_config.get("system_limits", {}).items():
-            if key == "easyrpg_max_item_count":
-                continue
             if "default" in defn:
                 defn["value"] = copy.deepcopy(defn["default"])
         self.cfg.save_config()

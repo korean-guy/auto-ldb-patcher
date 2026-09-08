@@ -291,5 +291,7 @@
   "main.msg_import_done": "'{folder}'의 설정을 불러왔습니다.",
   "common.btn_ok": "확인",
   "common.btn_cancel": "취소",
-  "lcf.msg_converting_wait": "DB 데이터 변환중\n잠시 기다려 주세요."
+  "lcf.msg_converting_wait": "DB 데이터 변환중\n잠시 기다려 주세요.",
+  "sys.easyrpg_default_actorai.name": "기본 아군 AI(전체 설정)",
+  "sys.easyrpg_default_enemyai.name": "기본 적 AI(전체 설정)"
 }

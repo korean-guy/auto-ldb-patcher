@@ -31,9 +31,9 @@ ENEMY_FIELD_DEFS = [
      "default": 0, "max": 2147483646,
      "description": "이 적의 민첩성입니다."},
 
-    {"name": "easyrpg_enemyai", "label": "AI 유형", "type": "enum", "group": "AI",
+    {"name": "easyrpg_enemyai", "label": "AI 유형(개별 설정)", "type": "enum", "group": "AI",
      "default": -1,
-     "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+", "2": "ATTACK"},
+     "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+"},
      "description": "이 적에게 적용할 AI 유형입니다."},
 
     {"name": "easyrpg_prevent_critical", "label": "크리티컬 방지", "type": "bool", "group": "전투",

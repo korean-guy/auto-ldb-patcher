@@ -99,14 +99,14 @@ DEFAULT_SYSTEM_DEFS = {
         "value": -1, "default": -1, "max": 255,
     },
     "easyrpg_default_actorai": {
-        "type": "enum", "name": "기본 아군 AI", "group": "AI",
-        "description": "기본적으로 사용할 아군 AI입니다.",
+        "type": "enum", "name": "기본 아군 AI(전체 설정)", "group": "AI",
+        "description": "기본적으로 사용할 아군 AI입니다. 액터 탭에서 개별 설정한 값이 있으면 이 전체 설정보다 우선 적용됩니다.",
         "value": -1, "default": -1,
         "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+", "2": "ATTACK"},
     },
     "easyrpg_default_enemyai": {
-        "type": "enum", "name": "기본 적 AI", "group": "AI",
-        "description": "기본적으로 사용할 적 AI입니다.",
+        "type": "enum", "name": "기본 적 AI(전체 설정)", "group": "AI",
+        "description": "기본적으로 사용할 적 AI입니다. 적 탭에서 개별 설정한 값이 있으면 이 전체 설정보다 우선 적용됩니다.",
         "value": -1, "default": -1,
         "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+"},
     },

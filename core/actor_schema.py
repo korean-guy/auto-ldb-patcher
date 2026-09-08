@@ -30,7 +30,7 @@ ACTOR_FIELD_DEFS = [
      "default": 0, "max": 2147483646,
      "description": "경험치 곡선의 보정치(exp_correction)입니다."},
 
-    {"name": "easyrpg_actorai", "label": "AI 유형", "type": "enum", "group": "AI",
+    {"name": "easyrpg_actorai", "label": "AI 유형(개별 설정)", "type": "enum", "group": "AI",
      "default": -1,
      "options": {"-1": "기본값", "0": "RPG_RT", "1": "RPG_RT+", "2": "ATTACK"},
      "description": "이 캐릭터에 적용할 AI 유형입니다."},
