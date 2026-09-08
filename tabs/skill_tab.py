@@ -159,29 +159,20 @@ class SkillTab:
         selected = self.skill_tree.selection()
         prev_iid = selected[0] if selected else None
 
-        self._suppress_tree_select = True
-        try:
-            for item in self.skill_tree.get_children(): self.skill_tree.delete(item)
-            for sk in self.cfg.current_config.get("skills", []):
-                sid = sk["id"]
-                name = sk.get("fields", {}).get("name") or self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
-                fields = sk.get("fields", {})
-                rating = fields.get("power", 0)
-                phys = fields.get("physical_rate", 0)
-                mag = fields.get("magical_rate", 0)
-                crit = fields.get("easyrpg_critical_hit_chance", 0)
-                self.skill_tree.insert("", "end", iid=str(sid), values=(sid, name, rating, phys, mag, crit))
+        for item in self.skill_tree.get_children(): self.skill_tree.delete(item)
+        for sk in self.cfg.current_config.get("skills", []):
+            sid = sk["id"]
+            name = sk.get("fields", {}).get("name") or self.app.edb_master_skills.get(sid) or t("common.msg_not_in_master_db")
+            fields = sk.get("fields", {})
+            rating = fields.get("power", 0)
+            phys = fields.get("physical_rate", 0)
+            mag = fields.get("magical_rate", 0)
+            crit = fields.get("easyrpg_critical_hit_chance", 0)
+            self.skill_tree.insert("", "end", iid=str(sid), values=(sid, name, rating, phys, mag, crit))
 
-            if prev_iid and self.skill_tree.exists(prev_iid):
-                self.skill_tree.selection_set(prev_iid)
-                self.skill_tree.see(prev_iid)
-        finally:
-            # selection_set()이 만드는 <<TreeviewSelect>> 이벤트는 즉시가 아니라
-            # Tk 이벤트 큐에 쌓였다가 다음 idle 처리 때 발생합니다. 여기서 바로
-            # 플래그를 False로 되돌리면 그 지연된 이벤트가 나중에 도착했을 때
-            # 억제되지 못하고 on_*_select가 다시 실행돼(상세 패널 재생성) 버리므로,
-            # 이번 이벤트 루프 한 바퀴가 다 돈 뒤(after_idle)에 해제합니다.
-            self.skill_tree.after_idle(lambda: setattr(self, "_suppress_tree_select", False))
+        if prev_iid and self.skill_tree.exists(prev_iid):
+            self.skill_tree.selection_set(prev_iid)
+            self.skill_tree.see(prev_iid)
 
     # ------------------------------------------------------------------
     def _update_selected_name_label(self, iid_text):
@@ -210,11 +201,15 @@ class SkillTab:
     # 좌측 목록 선택 -> 우측 속성 편집기 렌더링
     # ------------------------------------------------------------------
     def on_skill_select(self, event):
-        if getattr(self, "_suppress_tree_select", False):
-            return
         selected = self.skill_tree.selection()
         if not selected: return
         sid = int(selected[0])
+        # 이미 이 항목이 표시 중이면 다시 그리지 않습니다 (refresh()가 값 저장 뒤 같은
+        # 항목을 재선택할 때 불필요하게 다시 그려지는 것 방지 - 타이밍 기반 억제 플래그는
+        # 실제 클릭 이벤트까지 함께 무시해버리는 문제가 있어 "대상이 실제로 바뀌었는가"로
+        # 판단하는 방식으로 교체했습니다).
+        if self._current_skill is not None and self._current_skill.get("id") == sid:
+            return
         sk = next((s for s in self.cfg.current_config["skills"] if s["id"] == sid), None)
         if sk:
             self.skill_id_entry.delete(0, tk.END); self.skill_id_entry.insert(0, str(sid))

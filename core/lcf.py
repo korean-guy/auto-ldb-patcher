@@ -13,6 +13,7 @@ from tkinter import messagebox
 
 from core.logger import log
 from core.i18n import t
+from core.theme import show_busy_dialog, hide_busy_dialog
 from core.skill_schema import SKILL_FIELD_DEFS
 from core.item_schema import ITEM_FIELD_DEFS
 from core.actor_schema import ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS
@@ -22,7 +23,10 @@ from core.terrain_schema import TERRAIN_FIELD_DEFS
 
 
 def run_lcf2xml(cfg, target_file):
-    """lcf2xml.exe를 target_file에 대해 실행합니다. 실패 시 사용자 메시지를 띄우고 False를 반환합니다."""
+    """lcf2xml.exe를 target_file에 대해 실행합니다. 실패 시 사용자 메시지를 띄우고 False를 반환합니다.
+    subprocess.run()은 블로킹 호출이라 그동안 창이 멈춘 것처럼 보이므로, 실행 직전에
+    "DB 데이터 변환중, 잠시 기다려 주세요" 안내창을 띄워둡니다."""
+    dialog = show_busy_dialog(t("lcf.msg_converting_wait"))
     try:
         subprocess.run([cfg.lcf2xml_bin, target_file], check=True, shell=True, cwd=cfg.game_dir)
         return True
@@ -36,6 +40,8 @@ def run_lcf2xml(cfg, target_file):
         log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
         messagebox.showerror(t("common.title_fail"), t("lcf.msg_unknown_error", reason=e))
         return False
+    finally:
+        hide_busy_dialog(dialog)
 
 
 def decompile_and_parse_edb_directly(cfg):

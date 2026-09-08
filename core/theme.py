@@ -18,6 +18,57 @@ SELECT_BG = "#0a5a8a"
 BORDER = "#454545"
 
 
+def show_busy_dialog(message):
+    """작업 중임을 알리는 간단한 모달 안내창을 띄우고 그 창(Toplevel)을 반환합니다.
+    tkinter는 싱글스레드라 진짜 진행률 표시줄은 불가능하지만(어차피 lcf2xml.exe
+    실행 자체가 블로킹 호출이라 그 동안 이벤트 루프도 멈춥니다), 오래 걸리는 작업을
+    시작하기 직전에 이 창을 띄우고 강제로 화면에 그려서(update()) "멈춘 것처럼
+    보이는" 문제를 완화합니다. 작업이 끝나면 반드시 destroy()로 닫아야 합니다.
+    아직 메인 창이 없는 상태(예: 헤드리스 테스트)라면 아무 것도 하지 않고 None을
+    반환합니다 - 호출부는 반환값이 None이어도 destroy() 호출 없이 넘어가면 됩니다."""
+    root = tk._default_root
+    if root is None:
+        return None
+
+    dialog = tk.Toplevel(root)
+    dialog.overrideredirect(True)  # 제목표시줄/닫기버튼 없는 단순 안내창 (닫을 방법을 주지 않음)
+    dialog.configure(bg=BG, highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER)
+
+    ttk.Label(dialog, text=message, background=BG, foreground=FG, justify="center",
+              font=("Segoe UI", 10), padding=(28, 20)).pack()
+
+    dialog.update_idletasks()
+    dw, dh = dialog.winfo_width(), dialog.winfo_height()
+    if root.winfo_viewable():
+        x = root.winfo_rootx() + (root.winfo_width() - dw) // 2
+        y = root.winfo_rooty() + (root.winfo_height() - dh) // 2
+    else:
+        x = (dialog.winfo_screenwidth() - dw) // 2
+        y = (dialog.winfo_screenheight() - dh) // 2
+    dialog.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    try:
+        dialog.grab_set()
+    except tk.TclError:
+        pass
+    dialog.update()  # 블로킹 호출 직전에 반드시 실제로 화면에 그려지도록 강제
+    return dialog
+
+
+def hide_busy_dialog(dialog):
+    """show_busy_dialog()가 반환한 창을 안전하게 닫습니다."""
+    if dialog is None:
+        return
+    try:
+        dialog.grab_release()
+    except tk.TclError:
+        pass
+    try:
+        dialog.destroy()
+    except tk.TclError:
+        pass
+
+
 def apply_dark_theme(root):
     root.configure(bg=BG)
     style = ttk.Style()

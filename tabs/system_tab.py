@@ -109,36 +109,24 @@ class SystemTab:
         selected = self.sys_tree.selection()
         prev_iid = selected[0] if selected else None
 
-        # 값 저장 후 self.refresh()가 다시 호출될 때, 이전 선택을 복원하는 과정에서
-        # <<TreeviewSelect>>가 재발생해 상세 패널이 다시 그려지며 스크롤이 맨 위로
-        # 리셋되는 문제를 막기 위해, 이 구간 동안은 on_sys_select를 억제합니다.
-        self._suppress_tree_select = True
-        try:
-            for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
-            active_group = self.group_filter_var.get()
-            for key, defn in self.cfg.current_config.get("system_limits", {}).items():
-                if key == "easyrpg_max_item_count":
-                    continue
-                group = defn.get("group", "일반")
-                if active_group != t("system_tab.group_all") and group != active_group:
-                    continue
-                self.sys_tree.insert("", "end", iid=key, values=(
-                    t_field("sys", key, "name", defn.get("name", key)), group,
-                    TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
-                    self.format_sys_value(defn),
-                    self.format_sys_max(defn),
-                ))
+        for sys_item in self.sys_tree.get_children(): self.sys_tree.delete(sys_item)
+        active_group = self.group_filter_var.get()
+        for key, defn in self.cfg.current_config.get("system_limits", {}).items():
+            if key == "easyrpg_max_item_count":
+                continue
+            group = defn.get("group", "일반")
+            if active_group != t("system_tab.group_all") and group != active_group:
+                continue
+            self.sys_tree.insert("", "end", iid=key, values=(
+                t_field("sys", key, "name", defn.get("name", key)), group,
+                TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
+                self.format_sys_value(defn),
+                self.format_sys_max(defn),
+            ))
 
-            if prev_iid and self.sys_tree.exists(prev_iid):
-                self.sys_tree.selection_set(prev_iid)
-                self.sys_tree.see(prev_iid)
-        finally:
-            # selection_set()이 만드는 <<TreeviewSelect>> 이벤트는 즉시가 아니라
-            # Tk 이벤트 큐에 쌓였다가 다음 idle 처리 때 발생합니다. 여기서 바로
-            # 플래그를 False로 되돌리면 그 지연된 이벤트가 나중에 도착했을 때
-            # 억제되지 못하고 on_*_select가 다시 실행돼(상세 패널 재생성) 버리므로,
-            # 이번 이벤트 루프 한 바퀴가 다 돈 뒤(after_idle)에 해제합니다.
-            self.sys_tree.after_idle(lambda: setattr(self, "_suppress_tree_select", False))
+        if prev_iid and self.sys_tree.exists(prev_iid):
+            self.sys_tree.selection_set(prev_iid)
+            self.sys_tree.see(prev_iid)
 
     def format_sys_value(self, defn):
         field_type = defn.get("type", "int")
@@ -191,11 +179,15 @@ class SystemTab:
     # 타입별 동적 편집 패널 (고정 크기 패널 안에서만 스크롤)
     # ------------------------------------------------------------------
     def on_sys_select(self, event):
-        if getattr(self, "_suppress_tree_select", False):
-            return
         selected = self.sys_tree.selection()
         if not selected: return
         key = selected[0]
+        # 이미 이 항목이 표시 중이면 다시 그리지 않습니다 (refresh()가 값 저장 뒤 같은
+        # 항목을 재선택할 때 불필요하게 다시 그려지는 것 방지 - 타이밍 기반 억제 플래그는
+        # 실제 클릭 이벤트까지 함께 무시해버리는 문제가 있어 "대상이 실제로 바뀌었는가"로
+        # 판단하는 방식으로 교체했습니다).
+        if self._current_sys_key == key:
+            return
         defn = self.find_sys_def(key)
         if defn:
             self.render_sys_detail(key, defn)

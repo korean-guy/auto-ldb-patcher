@@ -290,5 +290,6 @@
   "main.msg_import_confirm": "현재 프로젝트의 설정을 '{folder}'의 값으로 덮어씁니다.\n되돌릴 수 없습니다. 계속하시겠습니까?",
   "main.msg_import_done": "'{folder}'의 설정을 불러왔습니다.",
   "common.btn_ok": "확인",
-  "common.btn_cancel": "취소"
+  "common.btn_cancel": "취소",
+  "lcf.msg_converting_wait": "DB 데이터 변환중\n잠시 기다려 주세요."
 }
