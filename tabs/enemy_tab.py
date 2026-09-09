@@ -29,7 +29,12 @@ from core.i18n import t
 
 
 class EnemyTab:
-    TITLE = t("enemy_tab.title")
+    @property
+    def TITLE(self):
+        # 클래스 속성으로 두면 이 모듈이 처음 임포트될 때(항상 set_language()보다
+        # 먼저 일어남 - 그래서 항상 기본 언어) 딱 한 번만 계산되어 고정돼버리므로,
+        # self.TITLE로 매번 조회될 때 새로 번역하도록 property로 만들었습니다.
+        return t("enemy_tab.title")
 
     def __init__(self, app):
         self.app = app

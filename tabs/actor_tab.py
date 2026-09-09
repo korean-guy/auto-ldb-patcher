@@ -25,9 +25,7 @@ from core.actor_schema import (ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS, STAT_ARRAY_LAB
                                 default_actor_fields, migrate_actor_entry, resize_stat_array)
 from core.stat_editor_popup import open_stat_editor_popup
 from core.logger import log
-from core.i18n import t
-
-ACTOR_GROUPS_ORDERED = [t("actor_tab.group_level")] + list(dict.fromkeys(fd.get("group", "기타") for fd in ACTOR_FIELD_DEFS))
+from core.i18n import t, t_field
 
 # 능력치 편집 팝업에서 다루는 6개 능력치 (표시 순서: MaxHP, MaxSP, Attack, Defense, Mind, Agility)
 # - core/stat_editor_popup.py가 이 목록과 라벨 키를 그대로 받아 Lv.1~99 / Lv.100~N 탭을 그려줍니다.
@@ -39,8 +37,22 @@ STAT_POPUP_LABEL_KEYS = {
 }
 
 
+def _actor_group_nav_items():
+    """(번역된 표시 텍스트) 목록을 매번 새로 계산해서 반환합니다 - 모듈 레벨 상수로
+    한 번만 계산해두면 임포트 시점(항상 기본 언어)에 고정돼버려 나중에 언어를 바꿔도
+    반영되지 않고, 게다가 '레벨/성장' 외의 그룹들은 애초에 번역을 거치지도 않고
+    원문 그대로 노출되는 문제가 있었습니다."""
+    raw_groups = list(dict.fromkeys(fd.get("group", "기타") for fd in ACTOR_FIELD_DEFS))
+    return [t("actor_tab.group_level")] + [t_field("group", g, "label", g) for g in raw_groups]
+
+
 class ActorTab:
-    TITLE = t("actor_tab.title")
+    @property
+    def TITLE(self):
+        # 클래스 속성으로 두면 이 모듈이 처음 임포트될 때(항상 set_language()보다
+        # 먼저 일어남 - 그래서 항상 기본 언어) 딱 한 번만 계산되어 고정돼버리므로,
+        # self.TITLE로 매번 조회될 때 새로 번역하도록 property로 만들었습니다.
+        return t("actor_tab.title")
 
     def __init__(self, app):
         self.app = app
@@ -123,9 +135,10 @@ class ActorTab:
         nav_frame.pack_propagate(False)
         nav_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(nav_frame, text=t("skill_tab.label_group_jump")).pack(side="left", padx=(0, 4))
-        self.group_nav_var = tk.StringVar(value=ACTOR_GROUPS_ORDERED[0] if ACTOR_GROUPS_ORDERED else "")
+        nav_items = _actor_group_nav_items()
+        self.group_nav_var = tk.StringVar(value=nav_items[0] if nav_items else "")
         self.group_nav_combo = ttk.Combobox(nav_frame, textvariable=self.group_nav_var,
-                                             values=ACTOR_GROUPS_ORDERED, state="readonly")
+                                             values=nav_items, state="readonly")
         self.group_nav_combo.pack(side="left", fill="x", expand=True, padx=(0, 4))
         ttk.Button(nav_frame, text=t("skill_tab.btn_jump"), width=5,
                    command=lambda: self.scroll_to_group(self.group_nav_var.get())).pack(side="left")
@@ -312,7 +325,10 @@ class ActorTab:
             if group != last_group:
                 header_holder2 = ttk.Frame(p); header_holder2.pack(fill="x", padx=8)
                 render_group_header(header_holder2, group)
-                self._group_anchor_widgets[group] = header_holder2
+                # 콤보박스에는 번역된 텍스트가 표시되므로, 나중에 그 텍스트로 다시 찾을 수
+                # 있도록 앵커도 번역된 텍스트를 키로 저장합니다 (원문 그대로 저장하면 언어를
+                # 바꿨을 때 콤보박스 선택값과 어긋나서 점프가 동작하지 않습니다).
+                self._group_anchor_widgets[t_field("group", group, "label", group)] = header_holder2
                 last_group = group
 
             row = ttk.Frame(p); row.pack(fill="x", padx=8)

@@ -475,5 +475,6 @@
   "option.비율 소모 (HP Percent).label": "割合消費 (HP Percent)",
   "main.label_language": "言語:",
   "main.title_language_restart": "言語を変更しました",
-  "main.msg_language_restart_confirm": "言語設定を保存しました。新しい言語を適用するにはプログラムの再起動が必要です。\n今すぐ再起動しますか?"
+  "main.msg_language_restart_confirm": "言語設定を保存しました。新しい言語を適用するにはプログラムの再起動が必要です。\n今すぐ再起動しますか?",
+  "main.msg_restart_fail": "自動的な再起動に失敗しました。\n{reason}\n\nプログラムを手動で終了してから再度起動してください。"
 }

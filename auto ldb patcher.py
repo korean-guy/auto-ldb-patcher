@@ -17,6 +17,7 @@ auto ldb patcher.py
 """
 import os
 import sys
+import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -28,7 +29,7 @@ from core.theme import BG, BG2, FG, FG_DIM, BORDER, apply_dark_theme, make_listb
 from core.tab_bar import WrappingNotebook
 from core.config import ConfigManager
 from core.logger import log
-from core.i18n import t
+from core.i18n import t, set_language, get_language
 from core import lcf
 
 from tabs.actor_tab import ActorTab
@@ -43,13 +44,12 @@ from tabs.system_tab import SystemTab
 TAB_CLASSES = [ActorTab, ClassTab, SkillTab, ItemTab, EnemyTab, TerrainTab, SystemTab]
 
 LOG_PANEL_HEIGHT = 7
+LANGUAGE_OPTIONS = [("ko", "한국어"), ("en", "English"), ("ja", "日本語")]
 
 
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title(t("main.window_title"))
-        self.root.geometry("1200x1300")
         self._init_ok = False
 
         self.cfg = ConfigManager(get_program_dir())
@@ -69,7 +69,23 @@ class App:
         apply_dark_theme(self.root)
         self.root.withdraw()
 
+        # load_common_config() 자체가 끝에서 로그를 하나 남기는데, 그 메시지까지도
+        # 올바른 언어로 나오도록 파일을 직접 살짝 미리 읽어 언어를 적용해둡니다
+        # (아래에서 load_common_config()가 끝난 뒤 한 번 더 정식으로 적용합니다).
+        try:
+            import json as _json
+            with open(self.cfg.config_file, "r", encoding="utf-8") as _f:
+                set_language(_json.load(_f).get("settings", {}).get("language", "ko"))
+        except Exception:
+            pass
+
         self.cfg.load_common_config()
+        # 저장된 언어 설정을 가장 먼저 적용합니다 - 창 제목을 비롯해 이 시점 이후의
+        # 모든 t() 호출(사전 점검 실패 메시지 등)이 올바른 언어로 나오도록 하기 위함입니다.
+        set_language(self.cfg.common_config.get("settings", {}).get("language", "ko"))
+
+        self.root.title(t("main.window_title"))
+        self.root.geometry("1200x1300")
 
         if not self.cfg.check_program_prerequisites():
             self.root.destroy()
@@ -133,6 +149,46 @@ class App:
             self.refresh_edb_overlay()
             if hasattr(self, "project_label"):
                 self.project_label.config(text=t("main.project_label", title=self.cfg.project_title, dir=self.cfg.game_dir))
+
+    def on_language_changed(self, event):
+        """언어 콤보박스에서 새 언어를 선택했을 때 호출됩니다. 이미 만들어진 수많은
+        위젯의 문자열을 전부 실시간으로 다시 그리는 대신(위험도가 높고 복잡함), 선택한
+        언어를 설정에 저장해두고 바로 재시작해서 새 언어로 다시 켜지도록 안내합니다."""
+        selected_name = self.language_var.get()
+        lang_code = next((code for code, name in LANGUAGE_OPTIONS if name == selected_name), "ko")
+        if lang_code == self.cfg.common_config.get("settings", {}).get("language", "ko"):
+            return
+
+        self.cfg.common_config.setdefault("settings", {})["language"] = lang_code
+        self.cfg.save_common_config()
+        log.info(f"Language changed to '{lang_code}' (applies after restart)")
+
+        if messagebox.askyesno(t("main.title_language_restart"), t("main.msg_language_restart_confirm")):
+            self.restart_app()
+
+    def restart_app(self):
+        """프로그램을 재시작합니다.
+        원래 os.execv()로 자기 자신을 대체 실행했었는데, PyInstaller --onefile 빌드에서는
+        이 방식이 "Security validation failure: failed to obtain executable path for
+        parent process!" 오류로 이어졌습니다 - onefile 부트로더는 임시로 압축 해제한
+        내용물을 정리하기 위해 실행 파일이 정상적인 방식(새 프로세스 생성)으로만
+        재실행되기를 기대하는데, execv는 현재 프로세스를 완전히 다른 프로그램으로
+        바꿔치기해버려서 부트로더 입장에서는 "부모 프로세스"가 사라져버린 것과 같은
+        상태가 되기 때문입니다. 그래서 대신 새 프로세스를 별도로 띄운 뒤, 지금 이
+        프로세스는 평범하게 종료하는 방식으로 바꿨습니다."""
+        try:
+            if getattr(sys, "frozen", False):
+                # PyInstaller 빌드: sys.argv[0]이 이미 실행 파일 경로 자체이므로 그대로 재실행
+                subprocess.Popen(sys.argv, cwd=os.getcwd())
+            else:
+                # 개발 모드(python "auto ldb patcher.py"): 인터프리터 + 스크립트 경로로 재실행
+                subprocess.Popen([sys.executable] + sys.argv, cwd=os.getcwd())
+        except Exception as e:
+            log.error(f"Failed to restart automatically: {e}")
+            messagebox.showerror(t("common.title_fail"), t("main.msg_restart_fail", reason=e))
+            return
+        self.root.destroy()
+        sys.exit(0)
 
     def apply_final_patch(self):
         if lcf.apply_final_patch(self.cfg):
@@ -206,6 +262,18 @@ class App:
         ttk.Button(top_frame, text=t("common.btn_reload_edb"), command=self.refresh_from_edb).pack(side="left", padx=5)
         ttk.Button(top_frame, text=t("main.btn_change_project"), command=self.change_project_file).pack(side="left", padx=5)
         ttk.Button(top_frame, text=t("main.btn_import_settings"), command=self.open_import_settings_dialog).pack(side="left", padx=5)
+
+        lang_frame = ttk.Frame(top_frame)
+        lang_frame.pack(side="left", padx=(15, 5))
+        ttk.Label(lang_frame, text=t("main.label_language")).pack(side="left", padx=(0, 4))
+        current_name = next((name for code, name in LANGUAGE_OPTIONS if code == get_language()), LANGUAGE_OPTIONS[0][1])
+        self.language_var = tk.StringVar(value=current_name)
+        self.language_combo = ttk.Combobox(
+            lang_frame, textvariable=self.language_var, state="readonly", width=9,
+            values=[name for _, name in LANGUAGE_OPTIONS],
+        )
+        self.language_combo.pack(side="left")
+        self.language_combo.bind("<<ComboboxSelected>>", self.on_language_changed)
         self.project_label = ttk.Label(
             top_frame, text=t("main.project_label", title=self.cfg.project_title, dir=self.cfg.game_dir), foreground=FG_DIM
         )

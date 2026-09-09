@@ -25,7 +25,7 @@ from core.property_panel import (make_fixed_scroll_panel, render_field_row, rend
                                   scroll_panel_to_top, scroll_panel_to_widget, DETAIL_WIDTH, DETAIL_HEIGHT)
 from core.skill_schema import SKILL_FIELD_DEFS, default_skill_fields, migrate_skill_entry
 from core.logger import log
-from core.i18n import t
+from core.i18n import t, t_field
 
 # enabled_when으로 다른 필드의 활성/비활성 여부를 좌우하는 "제어" 필드 이름들.
 # 이 필드가 바뀔 때만 패널을 다시 그려서 활성/비활성 상태를 갱신하면 됩니다 -
@@ -36,12 +36,22 @@ SKILL_CONTROLLING_FIELD_NAMES = {fd["enabled_when"]["field"] for fd in SKILL_FIE
 # 기본 위력/공격력 비율/정신력 비율은 edb에 이미 존재하는 실제 수치를 기본값으로 사용합니다.
 STAT_FIELDS_FROM_EDB = ("power", "physical_rate", "magical_rate")
 
-# 그룹 목록(등장 순서) - 상단 바로가기 버튼에 사용
-SKILL_GROUPS_ORDERED = list(dict.fromkeys(fd.get("group", "기타") for fd in SKILL_FIELD_DEFS))
+
+def _skill_group_nav_items():
+    """(번역된 표시 텍스트) 목록을 매번 새로 계산해서 반환합니다 - 모듈 레벨 상수로
+    한 번만 계산해두면 애초에 번역을 거치지 않아 항상 원문 그대로 노출되는 문제가
+    있었습니다(actor_tab.py의 동일한 문제와 같은 원인)."""
+    raw_groups = list(dict.fromkeys(fd.get("group", "기타") for fd in SKILL_FIELD_DEFS))
+    return [t_field("group", g, "label", g) for g in raw_groups]
 
 
 class SkillTab:
-    TITLE = t("skill_tab.title")
+    @property
+    def TITLE(self):
+        # 클래스 속성으로 두면 이 모듈이 처음 임포트될 때(항상 set_language()보다
+        # 먼저 일어남 - 그래서 항상 기본 언어) 딱 한 번만 계산되어 고정돼버리므로,
+        # self.TITLE로 매번 조회될 때 새로 번역하도록 property로 만들었습니다.
+        return t("skill_tab.title")
 
     def __init__(self, app):
         self.app = app
@@ -129,9 +139,10 @@ class SkillTab:
         nav_frame.pack_propagate(False)
         nav_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(nav_frame, text=t("skill_tab.label_group_jump")).pack(side="left", padx=(0, 4))
-        self.group_nav_var = tk.StringVar(value=SKILL_GROUPS_ORDERED[0] if SKILL_GROUPS_ORDERED else "")
+        nav_items = _skill_group_nav_items()
+        self.group_nav_var = tk.StringVar(value=nav_items[0] if nav_items else "")
         self.group_nav_combo = ttk.Combobox(nav_frame, textvariable=self.group_nav_var,
-                                             values=SKILL_GROUPS_ORDERED, state="readonly")
+                                             values=nav_items, state="readonly")
         self.group_nav_combo.pack(side="left", fill="x", expand=True, padx=(0, 4))
         ttk.Button(nav_frame, text=t("skill_tab.btn_jump"), width=5,
                    command=lambda: self.scroll_to_group(self.group_nav_var.get())).pack(side="left")
@@ -261,7 +272,9 @@ class SkillTab:
                 header_holder = ttk.Frame(p)
                 header_holder.pack(fill="x", padx=8)
                 render_group_header(header_holder, group)
-                self._group_anchor_widgets[group] = header_holder
+                # 콤보박스에는 번역된 텍스트가 표시되므로, 앵커도 번역된 텍스트를 키로
+                # 저장해야 언어를 바꿔도 점프 기능이 콤보박스 선택값과 계속 맞습니다.
+                self._group_anchor_widgets[t_field("group", group, "label", group)] = header_holder
                 last_group = group
 
             row = ttk.Frame(p)

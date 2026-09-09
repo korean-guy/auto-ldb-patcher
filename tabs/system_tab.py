@@ -18,12 +18,19 @@ from core.property_panel import make_fixed_scroll_panel, render_field_row, rende
 from core.logger import log
 from core.i18n import t, t_field
 
-TYPE_LABEL_MAP = {"int": t("type_label.int"), "bool": t("type_label.bool"),
-                   "enum": t("type_label.enum"), "list": t("type_label.list")}
+def _type_label_map():
+    """호출될 때마다 새로 계산합니다 - 모듈 임포트 시점(항상 기본 언어)에 한 번만
+    계산해서 딕셔너리에 고정해버리면, 나중에 set_language()로 언어를 바꿔도 이
+    값들은 계속 예전 언어로 남는 문제가 있었습니다(재시작해도 마찬가지 - 임포트는
+    항상 set_language() 호출보다 먼저 일어나기 때문)."""
+    return {"int": t("type_label.int"), "bool": t("type_label.bool"),
+            "enum": t("type_label.enum"), "list": t("type_label.list")}
 
 
 class SystemTab:
-    TITLE = t("system_tab.title")
+    @property
+    def TITLE(self):
+        return t("system_tab.title")
 
     def __init__(self, app):
         self.app = app
@@ -127,7 +134,7 @@ class SystemTab:
         for group, display_name, key, defn in entries:
             self.sys_tree.insert("", "end", iid=key, values=(
                 display_name, group,
-                TYPE_LABEL_MAP.get(defn.get("type", "int"), defn.get("type")),
+                _type_label_map().get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
                 self.format_sys_max(defn),
             ))
