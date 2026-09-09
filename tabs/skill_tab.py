@@ -273,7 +273,8 @@ class SkillTab:
                 enabled = fields.get(cond["field"]) == cond["equals"]
 
             control, set_enabled = render_field_row(
-                row, fd, fields.get(fd["name"], fd["default"]), self._make_on_change(fd["name"])
+                row, fd, fields.get(fd["name"], fd["default"]), self._make_on_change(fd["name"]),
+                namespace="skill",
             )
             set_enabled(enabled)
 

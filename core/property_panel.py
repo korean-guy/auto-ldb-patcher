@@ -15,7 +15,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from core.theme import BG, BG2, FG, FG_DIM, BORDER, make_checkbutton
-from core.i18n import t
+from core.i18n import t, t_field
 
 # System/Skill/Item 탭이 공통으로 사용하는 속성 편집기 고정 크기
 DETAIL_WIDTH = 320
@@ -158,21 +158,36 @@ def make_horizontal_scroll_panel(parent, width, height):
 
 
 def render_group_header(parent, text):
-    ttk.Label(parent, text=text, font=("Segoe UI", 10, "bold"),
+    """그룹 헤더를 그립니다. text는 "group.<원문>.label" 키로 번역을 찾아보고,
+    없으면(지금의 한국어처럼) 원문 그대로 씁니다 - 여러 스키마가 같은 그룹 이름
+    ("일반", "전투" 등)을 재사용하므로 그룹 이름 하나당 번역 한 번이면 충분합니다."""
+    display = t_field("group", text, "label", text)
+    ttk.Label(parent, text=display, font=("Segoe UI", 10, "bold"),
               foreground="#7fb6e0").pack(anchor="w", pady=(14, 2))
     tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", pady=(0, 4))
 
 
-def render_field_row(parent, field_def, value, on_change):
+def render_field_row(parent, field_def, value, on_change, namespace=None):
     """필드 하나(label/description/컨트롤)를 그립니다.
+    namespace를 주면(예: "item", "enemy") "<namespace>.<필드ID>.label" /
+    "<namespace>.<필드ID>.description" 키로 번역을 찾아보고, 없으면 스키마에 있는
+    한국어 원문을 그대로 씁니다. namespace를 생략하면(예: system 탭처럼 호출부가
+    이미 직접 번역해서 넘기는 경우) 기존과 동일하게 field_def의 값을 그대로 씁니다.
     반환값: (컨트롤_위젯, set_enabled(bool) 함수) - 조건부 활성/비활성에 사용."""
     field_type = field_def.get("type", "int")
     name = field_def.get("name")
 
-    ttk.Label(parent, text=field_def.get("label", name),
+    if namespace:
+        label_text = t_field(namespace, name, "label", field_def.get("label", name))
+        desc_text = t_field(namespace, name, "description", field_def.get("description", ""))
+    else:
+        label_text = field_def.get("label", name)
+        desc_text = field_def.get("description", "")
+
+    ttk.Label(parent, text=label_text,
               font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(8, 0))
-    if field_def.get("description"):
-        ttk.Label(parent, text=field_def["description"], foreground=FG_DIM,
+    if desc_text:
+        ttk.Label(parent, text=desc_text, foreground=FG_DIM,
                   wraplength=250).pack(anchor="w")
 
     control = None
@@ -236,6 +251,10 @@ def render_field_row(parent, field_def, value, on_change):
     elif field_type == "enum":
         options = field_def.get("options", {})
         items = sorted(options.items(), key=lambda kv: str(kv[0]))
+        if namespace:
+            # 여러 스키마가 "기본값"/"RPG_RT"처럼 같은 옵션 문구를 재사용하므로,
+            # 필드별이 아니라 옵션 값 하나당 번역을 공유하는 공용 네임스페이스를 씁니다.
+            items = [(k, t_field("option", str(v), "label", v)) for k, v in items]
         labels = [f"{k} : {v}" for k, v in items]
         var = tk.StringVar()
         cur_label = next((f"{k} : {v}" for k, v in items if str(k) == str(value)),

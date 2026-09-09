@@ -217,7 +217,7 @@ class ConfigManager:
         return {
             "last_game_dir": "",
             "recent_projects": [],
-            "settings": {"theme": "dark"},
+            "settings": {"theme": "dark", "language": "ko"},
             "system_limits": copy.deepcopy(DEFAULT_SYSTEM_DEFS),
         }
 

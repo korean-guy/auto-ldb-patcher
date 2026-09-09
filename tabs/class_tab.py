@@ -239,7 +239,8 @@ class ClassTab:
         for fd in CLASS_FIELD_DEFS:
             row = ttk.Frame(p); row.pack(fill="x", padx=8)
             control, set_enabled = render_field_row(
-                row, fd, fields.get(fd["name"], fd["default"]), self._make_on_change(fd["name"])
+                row, fd, fields.get(fd["name"], fd["default"]), self._make_on_change(fd["name"]),
+                namespace="class",
             )
             set_enabled(True)
 
