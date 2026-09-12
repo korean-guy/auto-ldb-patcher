@@ -21,7 +21,7 @@ from core.theme import (attach_tree_scrollbar, make_listbox_with_scroll,
 from core.context_menu import attach_row_context_menu
 from core.property_panel import (make_fixed_scroll_panel, render_field_row, render_group_header,
                                   scroll_panel_to_top, scroll_panel_to_widget, DETAIL_WIDTH, DETAIL_HEIGHT)
-from core.actor_schema import (ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS, STAT_ARRAY_LABELS, ABSOLUTE_MAX_LEVEL,
+from core.actor_schema import (ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS, ABSOLUTE_MAX_LEVEL,
                                 default_actor_fields, migrate_actor_entry, resize_stat_array)
 from core.stat_editor_popup import open_stat_editor_popup
 from core.logger import log
@@ -314,7 +314,11 @@ class ActorTab:
         level_entry.bind("<Return>", _commit_level)
         level_entry.bind("<FocusOut>", _commit_level)
 
-        stat_info = ", ".join(f"{STAT_ARRAY_LABELS[k]} {len(ac.get('parameters', {}).get(k, []))}단계" for k in STAT_ARRAY_KEYS)
+        stat_info = ", ".join(
+            t("actor_tab.stat_step_count", label=t(STAT_POPUP_LABEL_KEYS[k]),
+              count=len(ac.get('parameters', {}).get(k, [])))
+            for k in STAT_ARRAY_KEYS
+        )
         ttk.Label(level_row, text=t("actor_tab.stat_array_info", info=stat_info), foreground=FG_DIM,
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", pady=(4, 8))
 

@@ -18,9 +18,27 @@ core/i18n.py
 현재 UI 코드는 전혀 수정할 필요가 없습니다.
 """
 import os
+import sys
 import json
 
-LOCALES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales")
+
+def _get_locales_dir():
+    """core/locales 폴더의 실제 경로를 찾습니다.
+    PyInstaller --onefile로 빌드된 경우, --add-data로 넣어준 데이터 파일들은
+    실행 파일이 있는 폴더가 아니라 실행할 때마다 새로 만들어지는 임시 압축해제
+    폴더(sys._MEIPASS)에 풀립니다 - 그래서 이 경우엔 sys._MEIPASS를 우선 확인합니다.
+    (get_program_dir()이 반환하는 "exe와 같은 폴더"와는 다른 위치입니다 - 그쪽은
+    lcf2xml.exe/config.json처럼 사용자가 직접 볼 수 있어야 하는 파일들을 위한
+    경로이고, 여기는 exe 안에 파묻혀 배포되는 읽기 전용 리소스를 위한 경로입니다.)"""
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidate = os.path.join(meipass, "core", "locales")
+        if os.path.isdir(candidate):
+            return candidate
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales")
+
+
+LOCALES_DIR = _get_locales_dir()
 DEFAULT_LANG = "ko"
 
 _cache = {}
@@ -47,9 +65,23 @@ def _load(lang):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"[i18n] '{path}' 로드 실패: {e}")
+            _warn(f"'{path}' 로드 실패: {e}")
+    else:
+        # --windowed로 빌드하면 콘솔이 없어 print()만으로는 이 상황을 알아챌 방법이
+        # 없으므로(예: PyInstaller 빌드 시 --add-data로 core/locales를 넣는 걸
+        # 빠뜨린 경우), 가능하면 GUI 로그 패널에도 남깁니다.
+        _warn(f"locale 파일을 찾을 수 없습니다: '{path}' (LOCALES_DIR={LOCALES_DIR})")
     _cache[lang] = data
     return data
+
+
+def _warn(msg):
+    print(f"[i18n] {msg}")
+    try:
+        from core.logger import log
+        log.warning(f"[i18n] {msg}")
+    except Exception:
+        pass
 
 
 def t(key, **kwargs):

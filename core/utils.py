@@ -8,6 +8,8 @@ import sys
 import re
 import copy
 
+from core.i18n import t
+
 
 def get_program_dir():
     """프로그램(스크립트 또는 exe)이 위치한 최상위 폴더를 반환합니다.
@@ -35,20 +37,20 @@ def get_project_title(game_dir):
     fallback = os.path.basename(os.path.normpath(game_dir))
 
     if not os.path.exists(ini_path):
-        return fallback, "RPG_RT.ini 파일을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
+        return fallback, t("config.msg_ini_not_found")
 
     try:
         with open(ini_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
     except Exception as e:
-        return fallback, f"RPG_RT.ini 파일을 읽을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.\n(사유: {e})"
+        return fallback, t("config.msg_ini_read_error", reason=e)
 
     for key_name in ("GameTitle", "Title"):
         m = re.search(rf'^\s*{key_name}\s*=\s*(.+?)\s*$', text, re.MULTILINE | re.IGNORECASE)
         if m and m.group(1).strip():
             return m.group(1).strip(), None
 
-    return fallback, "RPG_RT.ini에서 GameTitle(Title) 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
+    return fallback, t("config.msg_ini_no_title")
 
 
 def normalize_options(raw_options):

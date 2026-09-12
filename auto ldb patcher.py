@@ -175,14 +175,28 @@ class App:
         재실행되기를 기대하는데, execv는 현재 프로세스를 완전히 다른 프로그램으로
         바꿔치기해버려서 부트로더 입장에서는 "부모 프로세스"가 사라져버린 것과 같은
         상태가 되기 때문입니다. 그래서 대신 새 프로세스를 별도로 띄운 뒤, 지금 이
-        프로세스는 평범하게 종료하는 방식으로 바꿨습니다."""
+        프로세스는 평범하게 종료하는 방식으로 바꿨습니다.
+
+        subprocess.Popen()으로 바꾼 뒤에도 "Failed to start embedded python
+        interpreter. Failed to import encodings module" 오류가 새로 발생할 수 있는데,
+        이는 PyInstaller onefile 부트로더가 내부적으로 설정해두는 환경변수
+        (_MEIPASS2 등 - "나는 이미 압축을 풀었으니 다시 풀지 마라"는 신호)를 새로
+        띄우는 프로세스가 그대로 물려받아서, 새 프로세스가 (지금 종료 중이라 곧
+        사라질 수도 있는) 부모의 임시 압축해제 폴더를 자기 것인 양 착각하고 그
+        안에서 파이썬 표준 라이브러리를 찾으려다 실패하기 때문입니다. 그래서 이런
+        부트로더 전용 환경변수를 지운 "깨끗한" 환경을 새로 만들어서 넘겨줍니다."""
+        env = os.environ.copy()
+        for key in list(env.keys()):
+            if key.startswith("_MEIPASS") or key.startswith("_PYI_"):
+                env.pop(key, None)
+
         try:
             if getattr(sys, "frozen", False):
                 # PyInstaller 빌드: sys.argv[0]이 이미 실행 파일 경로 자체이므로 그대로 재실행
-                subprocess.Popen(sys.argv, cwd=os.getcwd())
+                subprocess.Popen(sys.argv, cwd=os.getcwd(), env=env)
             else:
                 # 개발 모드(python "auto ldb patcher.py"): 인터프리터 + 스크립트 경로로 재실행
-                subprocess.Popen([sys.executable] + sys.argv, cwd=os.getcwd())
+                subprocess.Popen([sys.executable] + sys.argv, cwd=os.getcwd(), env=env)
         except Exception as e:
             log.error(f"Failed to restart automatically: {e}")
             messagebox.showerror(t("common.title_fail"), t("main.msg_restart_fail", reason=e))

@@ -476,5 +476,9 @@
   "main.label_language": "Language:",
   "main.title_language_restart": "Language Changed",
   "main.msg_language_restart_confirm": "Your language setting has been saved. The program needs to restart to apply the new language.\nRestart now?",
-  "main.msg_restart_fail": "Failed to restart automatically.\n{reason}\n\nPlease close and reopen the program manually."
+  "main.msg_restart_fail": "Failed to restart automatically.\n{reason}\n\nPlease close and reopen the program manually.",
+  "actor_tab.stat_step_count": "{label}: {count} steps",
+  "config.msg_ini_not_found": "Could not find RPG_RT.ini, so the folder name will be used as the project name.",
+  "config.msg_ini_read_error": "Could not read RPG_RT.ini, so the folder name will be used as the project name.\n(Reason: {reason})",
+  "config.msg_ini_no_title": "Could not find a GameTitle (or Title) value in RPG_RT.ini, so the folder name will be used as the project name."
 }

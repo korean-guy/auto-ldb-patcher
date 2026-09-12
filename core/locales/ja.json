@@ -476,5 +476,9 @@
   "main.label_language": "言語:",
   "main.title_language_restart": "言語を変更しました",
   "main.msg_language_restart_confirm": "言語設定を保存しました。新しい言語を適用するにはプログラムの再起動が必要です。\n今すぐ再起動しますか?",
-  "main.msg_restart_fail": "自動的な再起動に失敗しました。\n{reason}\n\nプログラムを手動で終了してから再度起動してください。"
+  "main.msg_restart_fail": "自動的な再起動に失敗しました。\n{reason}\n\nプログラムを手動で終了してから再度起動してください。",
+  "actor_tab.stat_step_count": "{label} {count}段階",
+  "config.msg_ini_not_found": "RPG_RT.iniファイルが見つからないため、フォルダ名をプロジェクト名として使用します。",
+  "config.msg_ini_read_error": "RPG_RT.iniファイルを読み込めないため、フォルダ名をプロジェクト名として使用します。\n(理由: {reason})",
+  "config.msg_ini_no_title": "RPG_RT.iniにGameTitle(Title)の値が見つからないため、フォルダ名をプロジェクト名として使用します。"
 }

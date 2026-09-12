@@ -297,5 +297,9 @@
   "main.label_language": "언어:",
   "main.title_language_restart": "언어 변경",
   "main.msg_language_restart_confirm": "언어 설정이 저장되었습니다. 새 언어를 적용하려면 프로그램을 다시 시작해야 합니다.\n지금 바로 다시 시작할까요?",
-  "main.msg_restart_fail": "자동으로 다시 시작하지 못했습니다.\n{reason}\n\n프로그램을 직접 종료했다가 다시 실행해 주세요."
+  "main.msg_restart_fail": "자동으로 다시 시작하지 못했습니다.\n{reason}\n\n프로그램을 직접 종료했다가 다시 실행해 주세요.",
+  "actor_tab.stat_step_count": "{label} {count}단계",
+  "config.msg_ini_not_found": "RPG_RT.ini 파일을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.",
+  "config.msg_ini_read_error": "RPG_RT.ini 파일을 읽을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.\n(사유: {reason})",
+  "config.msg_ini_no_title": "RPG_RT.ini에서 GameTitle(Title) 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
 }
