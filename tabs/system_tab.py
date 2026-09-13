@@ -105,8 +105,9 @@ class SystemTab:
 
     # ------------------------------------------------------------------
     def _all_groups(self):
-        groups = sorted({defn.get("group", "일반") for defn in self.cfg.current_config.get("system_limits", {}).values()})
-        return [t("system_tab.group_all")] + groups
+        raw_groups = {defn.get("group", "일반") for defn in self.cfg.current_config.get("system_limits", {}).values()}
+        translated = sorted({t_field("group", g, "label", g) for g in raw_groups})
+        return [t("system_tab.group_all")] + translated
 
     def refresh(self):
         self.group_filter_combo.configure(values=self._all_groups())
@@ -122,18 +123,19 @@ class SystemTab:
         entries = []
         for key, defn in self.cfg.current_config.get("system_limits", {}).items():
             group = defn.get("group", "일반")
-            if active_group != t("system_tab.group_all") and group != active_group:
+            display_group = t_field("group", group, "label", group)
+            if active_group != t("system_tab.group_all") and display_group != active_group:
                 continue
             display_name = t_field("sys", key, "name", defn.get("name", key))
-            entries.append((group, display_name, key, defn))
+            entries.append((display_group, display_name, key, defn))
         # 기본 정렬: 1차 그룹 오름차순 - 2차 옵션명(표시 이름) 오름차순
         # (컬럼 헤더를 클릭하면 core.theme.enable_column_sort가 별도로 그때그때 정렬해줌 -
         # 이건 어떤 정렬도 적용되지 않은 "처음 열었을 때"의 기본 순서입니다.)
         entries.sort(key=lambda e: (e[0], e[1]))
 
-        for group, display_name, key, defn in entries:
+        for display_group, display_name, key, defn in entries:
             self.sys_tree.insert("", "end", iid=key, values=(
-                display_name, group,
+                display_name, display_group,
                 _type_label_map().get(defn.get("type", "int"), defn.get("type")),
                 self.format_sys_value(defn),
                 self.format_sys_max(defn),
@@ -150,10 +152,13 @@ class SystemTab:
             return t("system_tab.value_bool_on") if val else t("system_tab.value_bool_off")
         if field_type == "enum":
             label = defn.get("options", {}).get(str(val))
-            return f'{val} ({label})' if label else str(val)
+            if not label:
+                return str(val)
+            return f'{val} ({t_field("option", label, "label", label)})'
         if field_type == "list":
             options = defn.get("options", {})
-            return " → ".join(options.get(str(v), str(v)) for v in (val or [])) or t("system_tab.value_list_empty")
+            labels = [t_field("option", options.get(str(v), str(v)), "label", options.get(str(v), str(v))) for v in (val or [])]
+            return " → ".join(labels) or t("system_tab.value_list_empty")
         return t("system_tab.value_default_limit") if val == -1 else f"{val:,}"
 
     def format_sys_max(self, defn):
@@ -233,7 +238,7 @@ class SystemTab:
                 self.cfg.save_config()
                 self.refresh()
                 log.info(t("system_tab.log_field_saved", name=self._current_sys_def.get("name"), value=new_val))
-            render_field_row(body, defn, defn.get("value"), _on_change)
+            render_field_row(body, defn, defn.get("value"), _on_change, namespace="sys", skip_label=True)
 
         elif field_type == "list":
             self._render_list_field(body, defn)
@@ -251,7 +256,8 @@ class SystemTab:
             v = int(k_str)
             var = tk.BooleanVar(value=v in current_vals)
             self.sys_list_vars[v] = var
-            make_checkbutton(parent, label, var, command=self.refresh_sys_list_order).pack(anchor="w")
+            make_checkbutton(parent, t_field("option", label, "label", label), var,
+                              command=self.refresh_sys_list_order).pack(anchor="w")
 
         ttk.Label(parent, text=t("system_tab.label_apply_order")).pack(anchor="w", pady=(10, 2))
         list_frame, self.sys_list_order_box = make_listbox_with_scroll(parent, height=5)
@@ -277,7 +283,8 @@ class SystemTab:
         self.sys_list_order_box.delete(0, tk.END)
         options = self._current_sys_def.get("options", {})
         for v in self.sys_list_order:
-            self.sys_list_order_box.insert(tk.END, options.get(str(v), str(v)))
+            raw_label = options.get(str(v), str(v))
+            self.sys_list_order_box.insert(tk.END, t_field("option", raw_label, "label", raw_label))
 
     def move_sys_list_item(self, direction):
         sel = self.sys_list_order_box.curselection()

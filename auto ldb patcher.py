@@ -85,7 +85,10 @@ class App:
         set_language(self.cfg.common_config.get("settings", {}).get("language", "ko"))
 
         self.root.title(t("main.window_title"))
-        self.root.geometry("1200x1300")
+        # 위치를 지정하지 않으면 창 관리자가 알아서 정하는데, 해상도가 큰 모니터
+        # (예: 2560x1440)에서는 창 높이(1300)를 기준으로 세로 중앙 근처에 배치하려다
+        # 아래쪽 로그 패널이 화면 밖으로 나가는 경우가 있어, 시작 Y 위치를 100으로 고정합니다.
+        self.root.geometry("1200x1300+100+100")
 
         if not self.cfg.check_program_prerequisites():
             self.root.destroy()
@@ -279,7 +282,10 @@ class App:
 
         lang_frame = ttk.Frame(top_frame)
         lang_frame.pack(side="left", padx=(15, 5))
-        ttk.Label(lang_frame, text=t("main.label_language")).pack(side="left", padx=(0, 4))
+        # 이 라벨만은 현재 UI 언어와 무관하게 항상 "Language:"로 고정합니다 - 언어를
+        # 잘못 선택해서 화면 전체가 낯선 언어로 바뀌어도, 언어 되돌리는 콤보박스
+        # 위치는 항상 같은 문구로 바로 알아볼 수 있어야 하기 때문입니다.
+        ttk.Label(lang_frame, text="Language:").pack(side="left", padx=(0, 4))
         current_name = next((name for code, name in LANGUAGE_OPTIONS if code == get_language()), LANGUAGE_OPTIONS[0][1])
         self.language_var = tk.StringVar(value=current_name)
         self.language_combo = ttk.Combobox(

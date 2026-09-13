@@ -167,28 +167,34 @@ def render_group_header(parent, text):
     tk.Frame(parent, bg=BORDER, height=1).pack(fill="x", pady=(0, 4))
 
 
-def render_field_row(parent, field_def, value, on_change, namespace=None):
+def render_field_row(parent, field_def, value, on_change, namespace=None, skip_label=False):
     """필드 하나(label/description/컨트롤)를 그립니다.
     namespace를 주면(예: "item", "enemy") "<namespace>.<필드ID>.label" /
     "<namespace>.<필드ID>.description" 키로 번역을 찾아보고, 없으면 스키마에 있는
     한국어 원문을 그대로 씁니다. namespace를 생략하면(예: system 탭처럼 호출부가
     이미 직접 번역해서 넘기는 경우) 기존과 동일하게 field_def의 값을 그대로 씁니다.
+    skip_label=True로 주면 이름/설명 라벨을 아예 그리지 않고 컨트롤만 그립니다 -
+    호출부가 이미 자기 방식대로 이름/설명을 그려둔 경우(예: system 탭) 여기서
+    또 그리면 같은 내용이 중복으로 나타나므로 이걸로 막습니다. namespace가 주어지면
+    enum/list 타입의 옵션 값 번역("option.<원문>.label")은 skip_label 여부와
+    무관하게 항상 적용됩니다.
     반환값: (컨트롤_위젯, set_enabled(bool) 함수) - 조건부 활성/비활성에 사용."""
     field_type = field_def.get("type", "int")
     name = field_def.get("name")
 
-    if namespace:
-        label_text = t_field(namespace, name, "label", field_def.get("label", name))
-        desc_text = t_field(namespace, name, "description", field_def.get("description", ""))
-    else:
-        label_text = field_def.get("label", name)
-        desc_text = field_def.get("description", "")
+    if not skip_label:
+        if namespace:
+            label_text = t_field(namespace, name, "label", field_def.get("label", name))
+            desc_text = t_field(namespace, name, "description", field_def.get("description", ""))
+        else:
+            label_text = field_def.get("label", name)
+            desc_text = field_def.get("description", "")
 
-    ttk.Label(parent, text=label_text,
-              font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(8, 0))
-    if desc_text:
-        ttk.Label(parent, text=desc_text, foreground=FG_DIM,
-                  wraplength=250).pack(anchor="w")
+        ttk.Label(parent, text=label_text,
+                  font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(8, 0))
+        if desc_text:
+            ttk.Label(parent, text=desc_text, foreground=FG_DIM,
+                      wraplength=250).pack(anchor="w")
 
     control = None
     set_enabled = lambda enabled: None
