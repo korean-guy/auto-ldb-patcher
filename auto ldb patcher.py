@@ -85,10 +85,10 @@ class App:
         set_language(self.cfg.common_config.get("settings", {}).get("language", "ko"))
 
         self.root.title(t("main.window_title"))
-        # 위치를 지정하지 않으면 창 관리자가 알아서 정하는데, 해상도가 큰 모니터
-        # (예: 2560x1440)에서는 창 높이(1300)를 기준으로 세로 중앙 근처에 배치하려다
-        # 아래쪽 로그 패널이 화면 밖으로 나가는 경우가 있어, 시작 Y 위치를 100으로 고정합니다.
-        self.root.geometry("1200x1300+100+100")
+        self.root.geometry(self._load_window_geometry())
+        # 창을 닫을 때(창의 X 버튼, 또는 프로그램 자체 종료) 항상 현재 위치/크기를
+        # 저장해두고, 다음 실행 시 그 상태 그대로 열립니다.
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         if not self.cfg.check_program_prerequisites():
             self.root.destroy()
@@ -107,6 +107,50 @@ class App:
         self.refresh_all_tabs()
         self.refresh_edb_overlay()
         self._init_ok = True
+
+    # ------------------------------------------------------------------
+    # 창 위치/크기 저장 및 복원
+    # ------------------------------------------------------------------
+    def _default_geometry(self):
+        # 창 관리자에게 위치를 맡기면(위치 생략) 해상도가 큰 모니터(예: 2560x1440)에서
+        # 세로 중앙 근처에 배치하려다 아래쪽 로그 패널이 화면 밖으로 나가는 경우가
+        # 있어서, 처음 실행할 때는 항상 화면 맨 위(0,0)에서 시작합니다.
+        return "1200x1300+0+0"
+
+    def _load_window_geometry(self):
+        """common_config에 저장된 이전 창 위치/크기를 읽어옵니다. 지금 화면 크기보다
+        저장된 값이 크거나, 위치가 화면 밖이면 화면에 맞게 보정합니다(예: 큰 모니터에
+        저장해뒀다가 작은 모니터에서 여는 경우 - 요청하신 "해상도 자동 인식"까지는
+        아니지만, 최소한 화면 밖으로 나가거나 화면보다 커지는 것은 막아줍니다)."""
+        import re
+        saved = self.cfg.common_config.get("settings", {}).get("window_geometry")
+        geometry = saved or self._default_geometry()
+
+        m = re.match(r"^(\d+)x(\d+)([+-]\d+)([+-]\d+)$", geometry)
+        if not m:
+            return self._default_geometry()
+        w, h, x, y = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        w = max(1, min(w, screen_w))
+        h = max(1, min(h, screen_h))
+        if x < 0 or x > screen_w - 100:
+            x = 0
+        if y < 0 or y > screen_h - 100:
+            y = 0
+        return f"{w}x{h}+{x}+{y}"
+
+    def _save_window_geometry(self):
+        try:
+            self.cfg.common_config.setdefault("settings", {})["window_geometry"] = self.root.geometry()
+            self.cfg.save_common_config()
+        except Exception as e:
+            log.warning(f"Failed to save window geometry: {e}")
+
+    def on_close(self):
+        self._save_window_geometry()
+        self.root.destroy()
 
     # ------------------------------------------------------------------
     # edb 동기화 (core.lcf 위임)
@@ -188,6 +232,8 @@ class App:
         사라질 수도 있는) 부모의 임시 압축해제 폴더를 자기 것인 양 착각하고 그
         안에서 파이썬 표준 라이브러리를 찾으려다 실패하기 때문입니다. 그래서 이런
         부트로더 전용 환경변수를 지운 "깨끗한" 환경을 새로 만들어서 넘겨줍니다."""
+        self._save_window_geometry()  # 재시작 후에도 같은 위치/크기로 열리도록 미리 저장
+
         env = os.environ.copy()
         for key in list(env.keys()):
             if key.startswith("_MEIPASS") or key.startswith("_PYI_"):
