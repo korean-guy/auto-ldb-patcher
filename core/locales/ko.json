@@ -301,5 +301,6 @@
   "actor_tab.stat_step_count": "{label} {count}단계",
   "config.msg_ini_not_found": "RPG_RT.ini 파일을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.",
   "config.msg_ini_read_error": "RPG_RT.ini 파일을 읽을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.\n(사유: {reason})",
-  "config.msg_ini_no_title": "RPG_RT.ini에서 GameTitle(Title) 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다."
+  "config.msg_ini_no_title": "RPG_RT.ini에서 GameTitle(Title) 값을 찾을 수 없어 폴더 이름을 프로젝트명으로 사용합니다.",
+  "system_tab.ai_type_help": "AI 타입별 동작:\n• 기본값(-1) : EasyRPG Player의 기본 설정을 그대로 사용합니다.\n• RPG_RT : 알만툴 원본과 똑같이 동작합니다(원본의 버그까지 그대로 재현).\n• RPG_RT+ : RPG_RT와 같지만 원본의 버그가 수정된 버전입니다.\n• ATTACK : RPG_RT+와 같지만 스킬을 쓰지 않고 물리 공격만 합니다."
 }
