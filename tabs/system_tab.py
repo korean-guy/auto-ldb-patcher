@@ -18,6 +18,11 @@ from core.property_panel import make_fixed_scroll_panel, render_field_row, rende
 from core.logger import log
 from core.i18n import t, t_field
 
+# 드롭다운 아래에 "AI 타입별 기능 설명"을 덧붙일 시스템 옵션들.
+# 액터 탭의 개별 AI 설정(easyrpg_actorai)에는 넣지 않습니다.
+AI_HELP_KEYS = ("easyrpg_default_actorai", "easyrpg_default_enemyai")
+
+
 def _type_label_map():
     """호출될 때마다 새로 계산합니다 - 모듈 임포트 시점(항상 기본 언어)에 한 번만
     계산해서 딕셔너리에 고정해버리면, 나중에 set_language()로 언어를 바꿔도 이
@@ -239,6 +244,14 @@ class SystemTab:
                 self.refresh()
                 log.info(t("system_tab.log_field_saved", name=self._current_sys_def.get("name"), value=new_val))
             render_field_row(body, defn, defn.get("value"), _on_change, namespace="sys", skip_label=True)
+
+            # AI 관련 전체 설정 항목에 한해, 드롭다운 아래에 각 AI 타입이 실제로 어떻게
+            # 동작하는지 간단한 설명을 덧붙입니다 (EasyRPG Player 공식 문서의
+            # --autobattle-algo / --enemyai-algo 설명 기준). 액터 탭의 개별 AI 설정에는
+            # 넣지 않습니다 - 사용자가 그쪽은 제외해달라고 요청했습니다.
+            if key in AI_HELP_KEYS:
+                ttk.Label(body, text=t("system_tab.ai_type_help"), foreground=FG_DIM,
+                          wraplength=DETAIL_WIDTH - 40, justify="left").pack(anchor="w", pady=(10, 4))
 
         elif field_type == "list":
             self._render_list_field(body, defn)

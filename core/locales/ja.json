@@ -480,5 +480,6 @@
   "actor_tab.stat_step_count": "{label} {count}段階",
   "config.msg_ini_not_found": "RPG_RT.iniファイルが見つからないため、フォルダ名をプロジェクト名として使用します。",
   "config.msg_ini_read_error": "RPG_RT.iniファイルを読み込めないため、フォルダ名をプロジェクト名として使用します。\n(理由: {reason})",
-  "config.msg_ini_no_title": "RPG_RT.iniにGameTitle(Title)の値が見つからないため、フォルダ名をプロジェクト名として使用します。"
+  "config.msg_ini_no_title": "RPG_RT.iniにGameTitle(Title)の値が見つからないため、フォルダ名をプロジェクト名として使用します。",
+  "system_tab.ai_type_help": "AIタイプごとの動作:\n• 初期値(-1): EasyRPG Playerの既定の設定をそのまま使用します。\n• RPG_RT: ツクール本来のエンジンとまったく同じ動作をします(本来のバグもそのまま再現)。\n• RPG_RT+: RPG_RTと同じですが、本来のエンジンのバグが修正されたものです。\n• ATTACK: RPG_RT+と同じですが、スキルを使わず物理攻撃のみを行います。"
 }
