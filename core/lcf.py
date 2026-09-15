@@ -212,7 +212,14 @@ def apply_final_patch(cfg):
                 if field_type == "bool":
                     text_val = "1" if val else "0"
                 elif field_type == "list":
-                    text_val = ",".join(str(v) for v in (val or []))
+                    # 이 LDB/EDB 포맷에서 숫자 벡터는 쉼표가 아니라 공백으로 구분합니다
+                    # (액터/클래스의 레벨별 능력치 배열도 같은 방식 - core/lcf.py의
+                    # " ".join(...) / .split() 부분 참고). 예전에는 쉼표로 이어붙였는데,
+                    # 사용자가 전투 명령 순서를 바꿔도 실제 게임에는 첫 번째 값 하나만
+                    # 반영되는 버그를 제보해서 확인해보니, 정확한 원인은 확실치 않지만
+                    # lcf2xml/엔진 쪽이 쉼표를 못 만나 숫자로 파싱하다 첫 번째 값에서
+                    # 멈췄을 가능성이 높아 보여 공백 구분으로 맞췄습니다.
+                    text_val = " ".join(str(v) for v in (val or []))
                 else:
                     text_val = str(val)
                 tag = actual_system_node.find(key)
