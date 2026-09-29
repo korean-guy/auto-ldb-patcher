@@ -208,11 +208,19 @@ def render_field_row(parent, field_def, value, on_change, namespace=None, skip_l
             try:
                 v = int(raw)
             except ValueError:
+                # default가 None인 필드(edb 원래 값을 그대로 보여주는 필드)는 화면에 처음
+                # 보여준 값으로 되돌립니다.
                 v = field_def.get("default", 0)
+                if v is None:
+                    v = value if isinstance(value, int) else 0
                 entry.delete(0, tk.END); entry.insert(0, str(v))
             max_limit = field_def.get("max")
             if max_limit is not None and max_limit >= 0 and v > max_limit:
                 v = max_limit
+                entry.delete(0, tk.END); entry.insert(0, str(v))
+            min_limit = field_def.get("min")
+            if min_limit is not None and v < min_limit:
+                v = min_limit
                 entry.delete(0, tk.END); entry.insert(0, str(v))
             on_change(v)
 

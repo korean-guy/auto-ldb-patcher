@@ -64,6 +64,7 @@ class App:
         self.edb_master_enemies = {}
         self.edb_master_enemy_stats = {}
         self.edb_master_terrains = {}
+        self.edb_master_item_data = {}
         self.tabs = []
 
         apply_dark_theme(self.root)
@@ -158,7 +159,7 @@ class App:
     def sync_edb_master_data(self):
         (items, item_types, skills, skill_stats,
          actors, actor_data, classes, class_data,
-         enemies, enemy_stats, terrains) = lcf.decompile_and_parse_edb_directly(self.cfg)
+         enemies, enemy_stats, terrains, item_data) = lcf.decompile_and_parse_edb_directly(self.cfg)
         if items is not None:
             self.edb_master_items = items
             self.edb_master_item_types = item_types
@@ -171,6 +172,7 @@ class App:
             self.edb_master_enemies = enemies
             self.edb_master_enemy_stats = enemy_stats
             self.edb_master_terrains = terrains
+            self.edb_master_item_data = item_data
 
     def notify_tabs_project_loaded(self):
         """탭이 프로젝트별 마이그레이션(예: 예전 스킬 저장 형식 변환)이 필요하면
