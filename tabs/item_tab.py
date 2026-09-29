@@ -12,7 +12,7 @@ from core.theme import (attach_tree_scrollbar, make_listbox_with_scroll,
 from core.context_menu import attach_row_context_menu
 from core.property_panel import (make_fixed_scroll_panel, render_field_row, render_group_header,
                                   scroll_panel_to_top, DETAIL_WIDTH, DETAIL_HEIGHT)
-from core.item_schema import ITEM_FIELD_DEFS, default_item_fields, migrate_item_entry
+from core.item_schema import EQUIPMENT_ITEM_TYPES, ITEM_FIELD_DEFS, default_item_fields, migrate_item_entry
 from core.logger import log
 from core.i18n import t
 
@@ -187,6 +187,14 @@ class ItemTab:
                     return
             fields = default_item_fields()
             fields["name"] = self.app.edb_master_items.get(iid, "")
+            # 설명/장비 능력치는 edb에 있는 실제 값으로 채워 넣습니다 (장비 능력치는 장비류만)
+            edb_data = self.app.edb_master_item_data.get(iid, {})
+            is_equipment = self.app.edb_master_item_types.get(iid) in EQUIPMENT_ITEM_TYPES
+            for fd in ITEM_FIELD_DEFS:
+                if fd.get("from_edb") and fd["name"] in edb_data:
+                    if fd.get("equipment_only") and not is_equipment:
+                        continue
+                    fields[fd["name"]] = edb_data[fd["name"]]
             existing = {"id": iid, "fields": fields}
             self.cfg.current_config["items"].append(existing)
             self.cfg.save_config()
@@ -209,6 +217,8 @@ class ItemTab:
         ttk.Label(p, text=t("item_tab.detail_header", id=it['id'], name=name), font=("Segoe UI", 10, "bold"),
                   wraplength=DETAIL_WIDTH - 30).pack(anchor="w", padx=8, pady=(8, 4))
 
+        is_equipment = self.app.edb_master_item_types.get(it["id"]) in EQUIPMENT_ITEM_TYPES
+
         last_group = None
         for fd in ITEM_FIELD_DEFS:
             group = fd.get("group", "기타")
@@ -221,12 +231,27 @@ class ItemTab:
             row = ttk.Frame(p)
             row.pack(fill="x", padx=8)
             control, set_enabled = render_field_row(
-                row, fd, fields.get(fd["name"], fd["default"]), self._make_on_change(fd["name"]),
+                row, fd, self._display_value(fd, fields, it["id"]), self._make_on_change(fd["name"]),
                 namespace="item",
             )
-            set_enabled(True)
+            # 장비 능력치는 장비류 아이템일 때만 수정할 수 있습니다.
+            set_enabled(not fd.get("equipment_only") or is_equipment)
 
         scroll_panel_to_top(self.detail_outer)
+
+    def _display_value(self, fd, fields, iid):
+        """입력칸에 보여줄 값. from_edb 필드는 저장된 값이 비어있으면(None/빈 문자열) edb의
+        원래 값을 대신 보여줍니다 - 예전에 등록해둔 아이템이라 저장된 값이 없어도 현재
+        내용을 알 수 있고, 손대지 않으면 저장되지 않아 원래 값이 그대로 유지됩니다."""
+        val = fields.get(fd["name"], fd["default"])
+        empty = val is None or (fd.get("type") == "string" and val == "")
+        if empty and fd.get("from_edb"):
+            edb_val = self.app.edb_master_item_data.get(iid, {}).get(fd["name"])
+            if edb_val is not None:
+                return edb_val
+        if val is None:
+            return 0 if fd.get("type") == "int" else ""
+        return val
 
     def _make_on_change(self, field_name):
         def _on_change(new_val):

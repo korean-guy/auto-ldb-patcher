@@ -18,9 +18,14 @@ from core.property_panel import make_fixed_scroll_panel, render_field_row, rende
 from core.logger import log
 from core.i18n import t, t_field
 
-# 드롭다운 아래에 "AI 타입별 기능 설명"을 덧붙일 시스템 옵션들.
+# 드롭다운 아래에 "AI 타입별 기능 설명"을 덧붙일 시스템 옵션들과, 각각에 쓸 설명 키.
+# 아군(AutoBattle)과 적(EnemyAI)은 선택 가능한 타입이 서로 달라서(EasyRPG 공식 매뉴얼
+# 기준 --autobattle-algo 에만 ATTACK이 있고 --enemyai-algo 에는 없음) 설명도 따로 씁니다.
 # 액터 탭의 개별 AI 설정(easyrpg_actorai)에는 넣지 않습니다.
-AI_HELP_KEYS = ("easyrpg_default_actorai", "easyrpg_default_enemyai")
+AI_HELP_KEYS = {
+    "easyrpg_default_actorai": "system_tab.ai_type_help_actor",
+    "easyrpg_default_enemyai": "system_tab.ai_type_help_enemy",
+}
 
 
 def _type_label_map():
@@ -250,7 +255,7 @@ class SystemTab:
             # --autobattle-algo / --enemyai-algo 설명 기준). 액터 탭의 개별 AI 설정에는
             # 넣지 않습니다 - 사용자가 그쪽은 제외해달라고 요청했습니다.
             if key in AI_HELP_KEYS:
-                ttk.Label(body, text=t("system_tab.ai_type_help"), foreground=FG_DIM,
+                ttk.Label(body, text=t(AI_HELP_KEYS[key]), foreground=FG_DIM,
                           wraplength=DETAIL_WIDTH - 40, justify="left").pack(anchor="w", pady=(10, 4))
 
         elif field_type == "list":

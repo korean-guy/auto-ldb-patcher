@@ -6,6 +6,7 @@ UI(탭)와 독립적으로, ConfigManager(cfg)와 아이템/스킬 마스터 데
 """
 import os
 import re
+import html
 import traceback
 import subprocess
 import xml.etree.ElementTree as ET
@@ -15,7 +16,7 @@ from core.logger import log
 from core.i18n import t
 from core.theme import show_busy_dialog, hide_busy_dialog
 from core.skill_schema import SKILL_FIELD_DEFS
-from core.item_schema import ITEM_FIELD_DEFS
+from core.item_schema import ITEM_FIELD_DEFS, EQUIPMENT_ITEM_TYPES
 from core.actor_schema import ACTOR_FIELD_DEFS, STAT_ARRAY_KEYS
 from core.class_schema import CLASS_FIELD_DEFS
 from core.enemy_schema import ENEMY_FIELD_DEFS
@@ -50,20 +51,20 @@ def decompile_and_parse_edb_directly(cfg):
              edb_master_skill_stats, edb_master_actors, edb_master_actor_data,
              edb_master_classes, edb_master_class_data,
              edb_master_enemies, edb_master_enemy_stats,
-             edb_master_terrains)
+             edb_master_terrains, edb_master_item_data)
     실패 시 전부 None"""
     if not os.path.exists(cfg.ldb_file):
-        return None, None, None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None, None
 
     log.info(t("lcf.log_converting"))
     if not run_lcf2xml(cfg, cfg.ldb_file):
-        return None, None, None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None, None
     if not os.path.exists(cfg.edb_file):
         messagebox.showerror(
             t("common.title_fail"),
             t("lcf.msg_edb_not_created")
         )
-        return None, None, None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None, None
 
     log.info(t("lcf.log_parsing"))
     edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats = {}, {}, {}, {}
@@ -71,6 +72,7 @@ def decompile_and_parse_edb_directly(cfg):
     edb_master_classes, edb_master_class_data = {}, {}
     edb_master_enemies, edb_master_enemy_stats = {}, {}
     edb_master_terrains = {}
+    edb_master_item_data = {}
     try:
         with open(cfg.edb_file, "r", encoding="utf-8") as f:
             xml_text = f.read()
@@ -83,6 +85,17 @@ def decompile_and_parse_edb_directly(cfg):
             edb_master_items[iid] = name_m.group(1) if name_m and name_m.group(1) else t("common.name_unknown")
             if type_m and type_m.group(1).strip().lstrip("-").isdigit():
                 edb_master_item_types[iid] = int(type_m.group(1).strip())
+
+            # 설명/장비 능력치의 edb 원래 값 (Item 탭에서 현재 값을 보여주고 기본값으로 쓰기 위함)
+            data = {}
+            desc_m = re.search(r'<description>(.*?)</description>', block, re.DOTALL | re.IGNORECASE)
+            if desc_m is not None:
+                data["description"] = html.unescape(desc_m.group(1))
+            for tag in ("atk_points1", "def_points1", "spi_points1", "agi_points1", "hit", "critical_hit"):
+                m = re.search(rf'<{tag}>\s*(-?\d+)\s*</{tag}>', block, re.IGNORECASE)
+                if m:
+                    data[tag] = int(m.group(1))
+            edb_master_item_data[iid] = data
 
         skill_block_pattern = re.compile(r'<Skill\s+id="(\d+)">(.*?)</Skill>', re.DOTALL | re.IGNORECASE)
         for match in skill_block_pattern.finditer(xml_text):
@@ -178,11 +191,12 @@ def decompile_and_parse_edb_directly(cfg):
         log.info(t("lcf.log_sync_done", item_count=len(edb_master_items), skill_count=len(edb_master_skills)))
         return (edb_master_items, edb_master_item_types, edb_master_skills, edb_master_skill_stats,
                 edb_master_actors, edb_master_actor_data, edb_master_classes, edb_master_class_data,
-                edb_master_enemies, edb_master_enemy_stats, edb_master_terrains)
+                edb_master_enemies, edb_master_enemy_stats, edb_master_terrains,
+                edb_master_item_data)
     except Exception as e:
         log.error(t("lcf.log_error_detail_hint")); traceback.print_exc()
         messagebox.showerror(t("common.title_fail"), t("lcf.msg_parse_error", reason=e))
-        return None, None, None, None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None, None, None, None
 
 
 def apply_final_patch(cfg):
@@ -239,11 +253,18 @@ def apply_final_patch(cfg):
                         nid = item_node.get("id") or (item_node.find("id").text if item_node.find("id") is not None else None)
                         if nid and int(nid) == it["id"]:
                             fields = it.get("fields", {})
+                            type_node = item_node.find("type")
+                            item_type = int(type_node.text) if type_node is not None and (type_node.text or "").strip().lstrip("-").isdigit() else None
+                            is_equipment = item_type in EQUIPMENT_ITEM_TYPES
                             for fd in ITEM_FIELD_DEFS:
                                 name = fd["name"]
                                 if name not in fields:
                                     continue
                                 val = fields[name]
+                                if val is None:
+                                    continue  # 아직 손대지 않은 값 - edb 원래 값을 그대로 둠
+                                if fd.get("equipment_only") and not is_equipment:
+                                    continue
                                 if fd.get("skip_if_empty") and not val:
                                     continue
                                 text_val = "T" if (fd.get("type") == "bool" and val) else ("F" if fd.get("type") == "bool" else str(val))
