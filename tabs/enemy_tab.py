@@ -62,6 +62,13 @@ class EnemyTab:
         left_frame = ttk.Frame(enemy_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.enemy_find_entry = ttk.Entry(find_frame)
+        self.enemy_find_entry.pack(side="left", fill="x", expand=True)
+        self.enemy_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         columns = ("ID", "이름", "최대체력", "최대마력", "공격력", "방어력", "정신력", "민첩성")
         self.enemy_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=18)
         headings = [
@@ -111,6 +118,7 @@ class EnemyTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_enemy_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_enemy_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(enemy_btn_frame, text=t("common.btn_add_all"), command=self.add_all_enemies).pack(fill="x", pady=(2, 0))
 
         ttk.Label(enemy_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         batch_row = ttk.Frame(enemy_btn_frame); batch_row.pack(fill="x", pady=2)
@@ -196,6 +204,14 @@ class EnemyTab:
             self._update_selected_name_label(str(en["id"]))
             self.render_enemy_detail(en)
 
+    def _build_new_entry(self, eid):
+        fields = default_enemy_fields()
+        real_stats = self.app.edb_master_enemy_stats.get(eid, {})
+        for key in STAT_FIELDS_FROM_EDB:
+            if key in real_stats:
+                fields[key] = real_stats[key]
+        return {"id": eid, "fields": fields}
+
     def open_editor_for_id(self, eid):
         """ID(검색 선택 또는 직접 입력)만으로 즉시 편집 패널을 엽니다.
         아직 목록에 없는 적이면 기본 스테이터스를 edb 실제 수치로 채워 자동 추가합니다."""
@@ -205,12 +221,7 @@ class EnemyTab:
             if eid not in self.app.edb_master_enemies:
                 if not messagebox.askyesno(t("common.title_warning"), t("enemy_tab.msg_confirm_add_unknown")):
                     return
-            fields = default_enemy_fields()
-            real_stats = self.app.edb_master_enemy_stats.get(eid, {})
-            for key in STAT_FIELDS_FROM_EDB:
-                if key in real_stats:
-                    fields[key] = real_stats[key]
-            existing = {"id": eid, "fields": fields}
+            existing = self._build_new_entry(eid)
             self.cfg.current_config["enemies"].append(existing)
             self.cfg.save_config()
             log.info(t("enemy_tab.log_added", id=eid))
@@ -220,6 +231,33 @@ class EnemyTab:
             self.enemy_tree.selection_set(str(eid))
             self.enemy_tree.see(str(eid))
         self.render_enemy_detail(existing)
+
+    def add_all_enemies(self):
+        existing_ids = {e["id"] for e in self.cfg.current_config["enemies"]}
+        to_add = sorted(eid for eid in self.app.edb_master_enemies if eid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("enemy_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("enemy_tab.title_confirm_add_all"), t("enemy_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for eid in to_add:
+            self.cfg.current_config["enemies"].append(self._build_new_entry(eid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("enemy_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("enemy_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        query = self.enemy_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.enemy_tree.get_children():
+            values = self.enemy_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.enemy_tree.selection_set(row_iid)
+                self.enemy_tree.see(row_iid)
+                self.enemy_tree.focus(row_iid)
+                break
 
     def render_enemy_detail(self, en):
         for w in self.enemy_detail_frame.winfo_children():

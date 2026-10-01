@@ -55,6 +55,13 @@ class TerrainTab:
         left_frame = ttk.Frame(terrain_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.terrain_find_entry = ttk.Entry(find_frame)
+        self.terrain_find_entry.pack(side="left", fill="x", expand=True)
+        self.terrain_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         self.terrain_tree = ttk.Treeview(left_frame, columns=("ID", "이름"), show="headings", height=18)
         for col, txt in [("ID", t("terrain_tab.col_id")), ("이름", t("terrain_tab.col_name"))]:
             self.terrain_tree.heading(col, text=txt)
@@ -91,6 +98,7 @@ class TerrainTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_terrain_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_terrain_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(terrain_btn_frame, text=t("common.btn_add_all"), command=self.add_all_terrains).pack(fill="x", pady=(2, 0))
 
         ttk.Label(terrain_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         ttk.Button(terrain_btn_frame, text=t("common.btn_clear_all"), command=self.batch_clear_terrains).pack(fill="x", pady=2)
@@ -168,6 +176,9 @@ class TerrainTab:
             self._update_selected_name_label(str(tr["id"]))
             self.render_terrain_detail(tr)
 
+    def _build_new_entry(self, iid):
+        return {"id": iid, "fields": default_terrain_fields()}
+
     def open_editor_for_id(self, iid):
         """ID(검색 선택 또는 직접 입력)만으로 즉시 편집 패널을 엽니다.
         아직 목록에 없는 지형이면 기본값으로 자동 추가합니다."""
@@ -177,8 +188,7 @@ class TerrainTab:
             if iid not in self.app.edb_master_terrains:
                 if not messagebox.askyesno(t("common.title_warning"), t("terrain_tab.msg_confirm_add_unknown")):
                     return
-            fields = default_terrain_fields()
-            existing = {"id": iid, "fields": fields}
+            existing = self._build_new_entry(iid)
             self.cfg.current_config["terrains"].append(existing)
             self.cfg.save_config()
             log.info(t("terrain_tab.log_added", id=iid))
@@ -188,6 +198,33 @@ class TerrainTab:
             self.terrain_tree.selection_set(str(iid))
             self.terrain_tree.see(str(iid))
         self.render_terrain_detail(existing)
+
+    def add_all_terrains(self):
+        existing_ids = {x["id"] for x in self.cfg.current_config["terrains"]}
+        to_add = sorted(iid for iid in self.app.edb_master_terrains if iid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("terrain_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("terrain_tab.title_confirm_add_all"), t("terrain_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for iid in to_add:
+            self.cfg.current_config["terrains"].append(self._build_new_entry(iid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("terrain_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("terrain_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        query = self.terrain_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.terrain_tree.get_children():
+            values = self.terrain_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.terrain_tree.selection_set(row_iid)
+                self.terrain_tree.see(row_iid)
+                self.terrain_tree.focus(row_iid)
+                break
 
     def render_terrain_detail(self, tr):
         for w in self.terrain_detail_frame.winfo_children():

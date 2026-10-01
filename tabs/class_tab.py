@@ -70,6 +70,13 @@ class ClassTab:
         left_frame = ttk.Frame(class_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.class_find_entry = ttk.Entry(find_frame)
+        self.class_find_entry.pack(side="left", fill="x", expand=True)
+        self.class_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         columns = ("ID", "이름", "능력치조절")
         self.class_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=18)
         for col, txt in [("ID", t("class_tab.col_id")), ("이름", t("class_tab.col_name")),
@@ -110,6 +117,7 @@ class ClassTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_class_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_class_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(class_btn_frame, text=t("common.btn_add_all"), command=self.add_all_classes).pack(fill="x", pady=(2, 0))
 
         ttk.Label(class_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         ttk.Button(class_btn_frame, text=t("common.btn_clear_all"), command=self.batch_clear_classes).pack(fill="x", pady=2)
@@ -201,6 +209,16 @@ class ClassTab:
             self._update_selected_name_label(str(cid))
             self.render_class_detail(cl)
 
+    def _build_new_entry(self, cid):
+        edb_data = self.app.edb_master_class_data.get(cid, {})
+        fields = default_class_fields()
+        for fd in CLASS_FIELD_DEFS:
+            if fd["name"] in edb_data:
+                fields[fd["name"]] = edb_data[fd["name"]]
+        level = self._max_allowed_level()
+        parameters = {k: resize_stat_array(edb_data.get("parameters", {}).get(k, []), level) for k in STAT_ARRAY_KEYS}
+        return {"id": cid, "fields": fields, "parameters": parameters}
+
     def open_editor_for_id(self, cid):
         self._update_selected_name_label(str(cid))
         existing = next((c for c in self.cfg.current_config["classes"] if c["id"] == cid), None)
@@ -208,15 +226,7 @@ class ClassTab:
             if cid not in self.app.edb_master_classes:
                 if not messagebox.askyesno(t("common.title_warning"), t("class_tab.msg_confirm_add_unknown")):
                     return
-            edb_data = self.app.edb_master_class_data.get(cid, {})
-            fields = default_class_fields()
-            for fd in CLASS_FIELD_DEFS:
-                if fd["name"] in edb_data:
-                    fields[fd["name"]] = edb_data[fd["name"]]
-            level = self._max_allowed_level()
-            parameters = {k: resize_stat_array(edb_data.get("parameters", {}).get(k, []), level) for k in STAT_ARRAY_KEYS}
-
-            existing = {"id": cid, "fields": fields, "parameters": parameters}
+            existing = self._build_new_entry(cid)
             self.cfg.current_config["classes"].append(existing)
             self.cfg.save_config()
             log.info(t("class_tab.log_added", id=cid))
@@ -226,6 +236,33 @@ class ClassTab:
             self.class_tree.selection_set(str(cid))
             self.class_tree.see(str(cid))
         self.render_class_detail(existing)
+
+    def add_all_classes(self):
+        existing_ids = {c["id"] for c in self.cfg.current_config["classes"]}
+        to_add = sorted(cid for cid in self.app.edb_master_classes if cid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("class_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("class_tab.title_confirm_add_all"), t("class_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for cid in to_add:
+            self.cfg.current_config["classes"].append(self._build_new_entry(cid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("class_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("class_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        query = self.class_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.class_tree.get_children():
+            values = self.class_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.class_tree.selection_set(row_iid)
+                self.class_tree.see(row_iid)
+                self.class_tree.focus(row_iid)
+                break
 
     def render_class_detail(self, cl):
         for w in self.class_detail_frame.winfo_children():

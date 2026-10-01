@@ -81,6 +81,13 @@ class SkillTab:
         left_frame = ttk.Frame(skill_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.skill_find_entry = ttk.Entry(find_frame)
+        self.skill_find_entry.pack(side="left", fill="x", expand=True)
+        self.skill_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         columns = ("ID", "이름", "위력", "공격력배율", "정신력배율", "크리티컬확률")
         self.skill_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=18)
         headings = [("ID", t("skill_tab.col_id")), ("이름", t("skill_tab.col_name")), ("위력", t("skill_tab.col_rating")),
@@ -124,6 +131,7 @@ class SkillTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_skill_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_skill_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(skill_btn_frame, text=t("common.btn_add_all"), command=self.add_all_skills).pack(fill="x", pady=(2, 0))
 
         ttk.Label(skill_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         batch_row = ttk.Frame(skill_btn_frame); batch_row.pack(fill="x", pady=2)
@@ -227,6 +235,15 @@ class SkillTab:
             self._update_selected_name_label(str(sid))
             self.render_skill_detail(sk)
 
+    def _build_new_entry(self, sid):
+        fields = default_skill_fields()
+        fields["name"] = self.app.edb_master_skills.get(sid, "")
+        real_stats = self.app.edb_master_skill_stats.get(sid, {})
+        for key in STAT_FIELDS_FROM_EDB:
+            if key in real_stats:
+                fields[key] = real_stats[key]
+        return {"id": sid, "fields": fields}
+
     def open_editor_for_id(self, sid):
         """ID(검색 선택 또는 직접 입력)만으로 즉시 편집 패널을 엽니다.
         아직 목록에 없는 스킬이면 기본값(가능하면 edb의 실제 위력/비율 값)으로 자동 추가합니다."""
@@ -236,13 +253,7 @@ class SkillTab:
             if sid not in self.app.edb_master_skills:
                 if not messagebox.askyesno(t("common.title_warning"), t("skill_tab.msg_confirm_add_unknown")):
                     return
-            fields = default_skill_fields()
-            fields["name"] = self.app.edb_master_skills.get(sid, "")
-            real_stats = self.app.edb_master_skill_stats.get(sid, {})
-            for key in STAT_FIELDS_FROM_EDB:
-                if key in real_stats:
-                    fields[key] = real_stats[key]
-            existing = {"id": sid, "fields": fields}
+            existing = self._build_new_entry(sid)
             self.cfg.current_config["skills"].append(existing)
             self.cfg.save_config()
             log.info(t("skill_tab.log_added", id=sid))
@@ -252,6 +263,33 @@ class SkillTab:
             self.skill_tree.selection_set(str(sid))
             self.skill_tree.see(str(sid))
         self.render_skill_detail(existing)
+
+    def add_all_skills(self):
+        existing_ids = {s["id"] for s in self.cfg.current_config["skills"]}
+        to_add = sorted(sid for sid in self.app.edb_master_skills if sid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("skill_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("skill_tab.title_confirm_add_all"), t("skill_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for sid in to_add:
+            self.cfg.current_config["skills"].append(self._build_new_entry(sid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("skill_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("skill_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        query = self.skill_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.skill_tree.get_children():
+            values = self.skill_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.skill_tree.selection_set(row_iid)
+                self.skill_tree.see(row_iid)
+                self.skill_tree.focus(row_iid)
+                break
 
     def render_skill_detail(self, sk):
         for w in self.skill_detail_frame.winfo_children():

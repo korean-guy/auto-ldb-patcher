@@ -52,6 +52,13 @@ class ItemTab:
         left_frame = ttk.Frame(item_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.item_find_entry = ttk.Entry(find_frame)
+        self.item_find_entry.pack(side="left", fill="x", expand=True)
+        self.item_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         self.item_tree = ttk.Treeview(left_frame, columns=("ID", "이름", "타입", "최대수량"),
                                        show="headings", height=18)
         for col, txt in [("ID", t("item_tab.col_id")), ("이름", t("item_tab.col_name")),
@@ -92,6 +99,7 @@ class ItemTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_item_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_item_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(item_btn_frame, text=t("common.btn_add_all"), command=self.add_all_items).pack(fill="x", pady=(2, 0))
 
         ttk.Label(item_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         batch_row1 = ttk.Frame(item_btn_frame); batch_row1.pack(fill="x", pady=2)
@@ -176,6 +184,21 @@ class ItemTab:
             self._update_selected_name_label(str(it["id"]))
             self.render_item_detail(it)
 
+    def _build_new_entry(self, iid):
+        """새로 등록할 아이템의 기본 항목을 만듭니다 (edb에 있는 실제 이름/설명/장비
+        능력치로 미리 채움 - 장비 능력치는 장비류 타입일 때만). ID 직접 입력으로
+        하나씩 추가할 때(open_editor_for_id)와 전체 추가(add_all_items)에서 공용으로 씁니다."""
+        fields = default_item_fields()
+        fields["name"] = self.app.edb_master_items.get(iid, "")
+        edb_data = self.app.edb_master_item_data.get(iid, {})
+        is_equipment = self.app.edb_master_item_types.get(iid) in EQUIPMENT_ITEM_TYPES
+        for fd in ITEM_FIELD_DEFS:
+            if fd.get("from_edb") and fd["name"] in edb_data:
+                if fd.get("equipment_only") and not is_equipment:
+                    continue
+                fields[fd["name"]] = edb_data[fd["name"]]
+        return {"id": iid, "fields": fields}
+
     def open_editor_for_id(self, iid):
         """ID(검색 선택 또는 직접 입력)만으로 즉시 편집 패널을 엽니다.
         아직 목록에 없는 아이템이면 기본값으로 자동 추가합니다."""
@@ -185,17 +208,7 @@ class ItemTab:
             if iid not in self.app.edb_master_items:
                 if not messagebox.askyesno(t("common.title_warning"), t("item_tab.msg_confirm_add_unknown")):
                     return
-            fields = default_item_fields()
-            fields["name"] = self.app.edb_master_items.get(iid, "")
-            # 설명/장비 능력치는 edb에 있는 실제 값으로 채워 넣습니다 (장비 능력치는 장비류만)
-            edb_data = self.app.edb_master_item_data.get(iid, {})
-            is_equipment = self.app.edb_master_item_types.get(iid) in EQUIPMENT_ITEM_TYPES
-            for fd in ITEM_FIELD_DEFS:
-                if fd.get("from_edb") and fd["name"] in edb_data:
-                    if fd.get("equipment_only") and not is_equipment:
-                        continue
-                    fields[fd["name"]] = edb_data[fd["name"]]
-            existing = {"id": iid, "fields": fields}
+            existing = self._build_new_entry(iid)
             self.cfg.current_config["items"].append(existing)
             self.cfg.save_config()
             log.info(t("item_tab.log_added", id=iid))
@@ -205,6 +218,37 @@ class ItemTab:
             self.item_tree.selection_set(str(iid))
             self.item_tree.see(str(iid))
         self.render_item_detail(existing)
+
+    def add_all_items(self):
+        """순정 DB(edb)에 있는 아이템 중 아직 목록에 등록되지 않은 것을 전부 추가합니다."""
+        existing_ids = {it["id"] for it in self.cfg.current_config["items"]}
+        to_add = sorted(iid for iid in self.app.edb_master_items if iid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("item_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("item_tab.title_confirm_add_all"), t("item_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for iid in to_add:
+            self.cfg.current_config["items"].append(self._build_new_entry(iid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("item_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("item_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        """좌측에 이미 등록된 목록에서 ID 또는 이름으로 검색해 해당 위치로 바로
+        이동하고 선택(커서 이동)합니다 - edb 전체를 뒤지는 검색(위의 이름 검색)과 달리,
+        지금 목록에 있는 항목들 사이에서만 찾습니다."""
+        query = self.item_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.item_tree.get_children():
+            values = self.item_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.item_tree.selection_set(row_iid)
+                self.item_tree.see(row_iid)
+                self.item_tree.focus(row_iid)
+                break
 
     def render_item_detail(self, it):
         for w in self.item_detail_frame.winfo_children():

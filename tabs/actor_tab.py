@@ -81,6 +81,13 @@ class ActorTab:
         left_frame = ttk.Frame(actor_frame)
         left_frame.pack(fill="both", expand=True, side="left")
 
+        find_frame = ttk.Frame(left_frame)
+        find_frame.pack(fill="x", pady=(0, 4))
+        ttk.Label(find_frame, text=t("common.label_find_in_list")).pack(side="left", padx=(0, 4))
+        self.actor_find_entry = ttk.Entry(find_frame)
+        self.actor_find_entry.pack(side="left", fill="x", expand=True)
+        self.actor_find_entry.bind("<KeyRelease>", self.on_find_in_list)
+
         columns = ("ID", "이름", "레벨상한", "능력치조절")
         self.actor_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=18)
         for col, txt in [("ID", t("actor_tab.col_id")), ("이름", t("actor_tab.col_name")),
@@ -122,6 +129,7 @@ class ActorTab:
         add_del_row.pack(fill="x", pady=3)
         ttk.Button(add_del_row, text=t("common.btn_add_to_list"), command=self.add_actor_rule).pack(side="left", expand=True, fill="x", padx=(0, 2))
         ttk.Button(add_del_row, text=t("common.btn_remove_from_list"), command=self.delete_actor_rule).pack(side="left", expand=True, fill="x", padx=(2, 0))
+        ttk.Button(actor_btn_frame, text=t("common.btn_add_all"), command=self.add_all_actors).pack(fill="x", pady=(2, 0))
 
         ttk.Label(actor_btn_frame, text=t("common.label_batch_settings")).pack(anchor="w", pady=(20, 4))
         batch_row1 = ttk.Frame(actor_btn_frame); batch_row1.pack(fill="x", pady=2)
@@ -238,6 +246,20 @@ class ActorTab:
             return ABSOLUTE_MAX_LEVEL
         return max(1, min(ABSOLUTE_MAX_LEVEL, sys_max))
 
+    def _build_new_entry(self, aid):
+        edb_data = self.app.edb_master_actor_data.get(aid, {})
+        fields = default_actor_fields()
+        for fd in ACTOR_FIELD_DEFS:
+            if fd["name"] in edb_data:
+                fields[fd["name"]] = edb_data[fd["name"]]
+        final_level = edb_data.get("final_level", ABSOLUTE_MAX_LEVEL)
+        parameters = {k: resize_stat_array(edb_data.get("parameters", {}).get(k, []), final_level) for k in STAT_ARRAY_KEYS}
+        return {
+            "id": aid, "fields": fields, "final_level": final_level, "parameters": parameters,
+            "original_fields": dict(fields), "original_final_level": final_level,
+            "original_parameters": {k: list(v) for k, v in parameters.items()},
+        }
+
     def open_editor_for_id(self, aid):
         """ID(검색 선택 또는 직접 입력)만으로 즉시 편집 패널을 엽니다.
         아직 목록에 없는 액터면 edb의 실제 값으로 자동 추가합니다."""
@@ -247,19 +269,7 @@ class ActorTab:
             if aid not in self.app.edb_master_actors:
                 if not messagebox.askyesno(t("common.title_warning"), t("actor_tab.msg_confirm_add_unknown")):
                     return
-            edb_data = self.app.edb_master_actor_data.get(aid, {})
-            fields = default_actor_fields()
-            for fd in ACTOR_FIELD_DEFS:
-                if fd["name"] in edb_data:
-                    fields[fd["name"]] = edb_data[fd["name"]]
-            final_level = edb_data.get("final_level", ABSOLUTE_MAX_LEVEL)
-            parameters = {k: resize_stat_array(edb_data.get("parameters", {}).get(k, []), final_level) for k in STAT_ARRAY_KEYS}
-
-            existing = {
-                "id": aid, "fields": fields, "final_level": final_level, "parameters": parameters,
-                "original_fields": dict(fields), "original_final_level": final_level,
-                "original_parameters": {k: list(v) for k, v in parameters.items()},
-            }
+            existing = self._build_new_entry(aid)
             self.cfg.current_config["actors"].append(existing)
             self.cfg.save_config()
             log.info(t("actor_tab.log_added", id=aid))
@@ -269,6 +279,33 @@ class ActorTab:
             self.actor_tree.selection_set(str(aid))
             self.actor_tree.see(str(aid))
         self.render_actor_detail(existing)
+
+    def add_all_actors(self):
+        existing_ids = {a["id"] for a in self.cfg.current_config["actors"]}
+        to_add = sorted(aid for aid in self.app.edb_master_actors if aid not in existing_ids)
+        if not to_add:
+            messagebox.showinfo(t("common.title_notice"), t("actor_tab.msg_add_all_none"))
+            return
+        if not messagebox.askyesno(t("actor_tab.title_confirm_add_all"), t("actor_tab.msg_confirm_add_all", count=len(to_add))):
+            return
+        for aid in to_add:
+            self.cfg.current_config["actors"].append(self._build_new_entry(aid))
+        self.cfg.save_config()
+        self.app.refresh_all_tabs()
+        log.info(t("actor_tab.log_add_all_done", count=len(to_add)))
+        messagebox.showinfo(t("common.title_done"), t("actor_tab.msg_add_all_done", count=len(to_add)))
+
+    def on_find_in_list(self, event):
+        query = self.actor_find_entry.get().strip().lower()
+        if not query:
+            return
+        for row_iid in self.actor_tree.get_children():
+            values = self.actor_tree.item(row_iid)["values"]
+            if query in str(values[0]).lower() or query in str(values[1]).lower():
+                self.actor_tree.selection_set(row_iid)
+                self.actor_tree.see(row_iid)
+                self.actor_tree.focus(row_iid)
+                break
 
     def render_actor_detail(self, ac):
         for w in self.actor_detail_frame.winfo_children():

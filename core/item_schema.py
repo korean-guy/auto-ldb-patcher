@@ -23,7 +23,7 @@ ITEM_FIELD_DEFS = [
     {"name": "description", "label": "설명", "type": "string", "group": "일반",
      "default": "", "skip_if_empty": True,
      "from_edb": True,
-     "description": "아이템 메뉴 등에 표시되는 설명 문구입니다. 비워두면 순정 설명을 그대로 유지합니다."},
+     "description": "아이템 메뉴 등에 표시되는 설명 문구입니다."},
     {"name": "easyrpg_max_count", "label": "최대 소지 수량", "type": "int", "group": "일반",
      "default": -1, "max": 255,
      "description": "이 아이템의 최대 소지 수량입니다. -1은 엔진 기본값을 사용합니다."},
